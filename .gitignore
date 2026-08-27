@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env
+*.log
+
+# Node.js
+node_modules/
+dist/
+.vite/
+
+# Large AI Models (GitHub blocks files > 100MB)
+authentimark-gui/models/*.pt
+authentimark-gui/models/
+
+# OS files
+.DS_Store
+Thumbs.db
+
