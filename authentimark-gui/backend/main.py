@@ -18,6 +18,9 @@ from .inference import (
     attack_noise,
     attack_blur,
     attack_jpeg,
+    attack_brightness,
+    attack_downscale,
+    attack_screenshot,
     decode_message
 )
 
@@ -152,6 +155,12 @@ async def simulate_attack(
             attacked_image = attack_blur(image, intensity)
         elif attackType == "jpeg":
             attacked_image = attack_jpeg(image, intensity)
+        elif attackType == "brightness":
+            attacked_image = attack_brightness(image, intensity)
+        elif attackType == "downscale":
+            attacked_image = attack_downscale(image, intensity)
+        elif attackType == "screenshot":
+            attacked_image = attack_screenshot(image, intensity)
         else:
             attacked_image = image
             

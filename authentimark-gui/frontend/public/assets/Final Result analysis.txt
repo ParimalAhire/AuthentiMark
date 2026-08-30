@@ -1,0 +1,74 @@
+======================================================================
+RESULT ANALYSIS -- AUTOENCODER (AE)
+======================================================================
+Final image loss (MSE): 0.00025
+Final message loss (BCE): 0.00043
+Final val bit accuracy: 0.9996 (100.0%)
+Best val bit accuracy: 1.0000 at epoch 1
+Improvement over random chance: 50.0 percentage points
+Verdict: Strong watermark recovery. The encoder-decoder pair reliably embeds and
+recovers the 32-bit message with high fidelity, and the low image loss indicates
+the watermark remains visually unobtrusive.
+
+======================================================================
+RESULT ANALYSIS -- VARIATIONAL AUTOENCODER (VAE)
+======================================================================
+Final image loss (MSE): 0.00131
+Final message loss (BCE): 0.00832
+Final KL divergence: 1.44334
+Final val bit accuracy: 0.9883 (98.8%)
+Best val bit accuracy: 0.9913 at epoch 58
+Improvement over random chance: 48.8 percentage points
+Verdict: Strong watermark recovery with a regularized latent space. The KL term is
+keeping the embedding space well-structured without destroying message recoverability.
+
+======================================================================
+HEAD-TO-HEAD COMPARISON
+======================================================================
+Metric                                     AE            VAE
+Final image loss                      0.00025        0.00131
+Final message loss                    0.00043        0.00832
+Final val bit accuracy                 0.9996         0.9883
+Best val bit accuracy                  1.0000         0.9913
+
+AE outperforms VAE on bit recovery by 1.1 percentage points. This can
+happen when the KL term constrains the VAE's embedding capacity relative to the AE's
+unconstrained mapping -- a known accuracy-vs-regularization trade-off.
+AE preserves image fidelity slightly better (lower image loss by 0.00106).
+
+Interpretation for report: the AE represents a deterministic baseline for watermark
+embedding, while the VAE tests whether a regularized, sampled latent space improves
+generalization and robustness at the cost of some embedding capacity. This trade-off
+is expected to matter most once both models are evaluated under the attack suite
+(Section 7), where the VAE's smoother latent space may prove more resilient to
+real-world image transformations even if its clean-condition accuracy is comparable
+or slightly lower than the AE's.
+
+
+
+Detection accuracy by watermark source:
+  clean     : 0.9901 (2886/2915)
+  ae        : 0.9993 (2913/2915)
+  vae       : 0.9945 (2899/2915)
+
+Detection accuracy by image content category:
+  art_style   : 0.9958 (2593/2604)
+  landscape   : 0.9895 (751/759)
+  object      : 0.9655 (84/87)
+  other       : 0.9905 (1670/1686)
+  portrait    : 0.9975 (3600/3609)
+
+
+
+======================================================================
+COMBINED PERFORMANCE SUMMARY -- AE, VAE, TRANSFORMER DETECTOR
+======================================================================
+Model                    Key Metric                         Value
+Autoencoder (AE)         Val bit accuracy                  0.9996
+VAE                      Val bit accuracy                  0.9883
+Transformer Detector     Test accuracy                     0.9946
+
+Detection accuracy by source (from Section 6e):
+  clean     : 0.9901
+  ae        : 0.9993
+  vae       : 0.9945

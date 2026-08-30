@@ -3,7 +3,7 @@ import io
 import torch
 import numpy as np
 import torchvision.transforms as T
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageEnhance
 from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, WatermarkDetector, prepare_for_vit
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -134,6 +134,30 @@ def attack_jpeg(image, quality):
     image.save(buffered, format="JPEG", quality=int(quality))
     buffered.seek(0)
     return Image.open(buffered).convert("RGB")
+
+def attack_brightness(image, factor):
+    # factor 1.0 = unchanged; <1 darker, >1 brighter
+    return ImageEnhance.Brightness(image).enhance(float(factor))
+
+def attack_downscale(image, scale_ratio):
+    # shrink to scale_ratio then restore size -> real detail loss
+    w, h = image.size
+    scale_ratio = max(0.1, min(1.0, float(scale_ratio)))
+    small = image.resize(
+        (max(1, int(w * scale_ratio)), max(1, int(h * scale_ratio))),
+        resample=Image.BICUBIC,
+    )
+    return small.resize((w, h), resample=Image.BICUBIC)
+
+def attack_screenshot(image, severity):
+    # approximates capturing an image off a screen:
+    # slight downscale + mild recompression + faint blur + tiny brightness lift
+    severity = max(0.0, min(1.0, float(severity)))
+    out = attack_downscale(image, 1.0 - 0.18 * severity)
+    out = attack_blur(out, 0.4 + 0.8 * severity)
+    out = attack_brightness(out, 1.0 + 0.05 * severity)
+    quality = int(92 - 40 * severity)
+    return attack_jpeg(out, quality)
 
 def decode_message(image, method):
     if method == "ae":
