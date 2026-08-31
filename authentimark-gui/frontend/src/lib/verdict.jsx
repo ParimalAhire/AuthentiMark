@@ -11,7 +11,7 @@ export function signalOf(result) {
 /* verdict from the watermark-present probability, matching the
    backend's 0.75 threshold on class confidence */
 export function verdictFromSignal(signal) {
-  if (signal >= 0.75) return { headline: 'Watermark holding', tone: 'signal', icon: 'check' }
+  if (signal >= 0.75) return { headline: 'Watermark holding', tone: 'trace', icon: 'check' }
   if (signal <= 0.25) return { headline: 'Watermark lost', tone: 'break', icon: 'minus' }
   return { headline: 'Uncertain', tone: 'caution', icon: 'alert' }
 }
@@ -22,10 +22,10 @@ export function verdictInfo(result) {
   if (!result) return null
   const { verdict, confidence } = result
   if (verdict === 'Likely watermarked') {
-    return { headline: 'Likely watermarked', tone: 'signal', icon: 'check', note: 'A watermark signal is present.' }
+    return { headline: 'Likely watermarked', tone: 'trace', icon: 'check', note: 'A watermark signal is present.' }
   }
   if (verdict === 'Likely not watermarked') {
-    return { headline: 'Likely not watermarked', tone: 'trace', icon: 'minus', note: 'No watermark signal found.' }
+    return { headline: 'Likely not watermarked', tone: 'mute', icon: 'minus', note: 'No watermark signal found.' }
   }
   return {
     headline: 'Uncertain — inconclusive',

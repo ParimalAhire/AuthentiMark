@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 
 export function toneFor(value, explicit) {
   if (explicit) return explicit
-  if (value >= 75) return 'signal'
+  if (value >= 75) return 'trace'
   if (value >= 45) return 'caution'
   return 'break'
 }
 
 const TONE_HEX = {
-  signal: '#4ADE80',
-  caution: '#FBBF24',
-  break: '#FB5D5D',
-  trace: '#5B8DEF'
+  signal: 'var(--signal)',
+  caution: 'var(--caution)',
+  break: 'var(--break)',
+  trace: 'var(--trace)'
 }
 
 /* Animated count-up so the number sweeps with the needle */
@@ -62,14 +62,14 @@ export default function SignalMeter({
           <g transform={`rotate(135 ${size / 2} ${size / 2})`}>
             <circle
               cx={size / 2} cy={size / 2} r={r}
-              fill="none" stroke="rgba(245,243,236,0.09)" strokeWidth={size * 0.05}
+              fill="none" stroke="var(--line-2)" strokeWidth={size * 0.05}
               strokeDasharray={`${c * arc} ${c}`} strokeLinecap="round"
             />
             <circle
               cx={size / 2} cy={size / 2} r={r}
               fill="none" stroke={hex} strokeWidth={size * 0.05}
               strokeDasharray={`${c * arc * (swept / 100)} ${c}`} strokeLinecap="round"
-              style={{ transition: 'stroke 0.5s ease', filter: `drop-shadow(0 0 6px ${hex}aa)` }}
+              style={{ transition: 'stroke 0.5s ease' }}
             />
           </g>
           {/* tick marks */}
@@ -79,7 +79,7 @@ export default function SignalMeter({
             const y1 = size / 2 + Math.sin(a) * (r + size * 0.045)
             const x2 = size / 2 + Math.cos(a) * (r + size * 0.09)
             const y2 = size / 2 + Math.sin(a) * (r + size * 0.09)
-            return <line key={p} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(245,243,236,0.25)" strokeWidth="1" />
+            return <line key={p} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--line-2)" strokeWidth="1" />
           })}
           {/* needle */}
           <line
@@ -87,9 +87,9 @@ export default function SignalMeter({
             x2={size / 2} y2={size / 2 - r * 0.9}
             stroke={hex} strokeWidth="2.5" strokeLinecap="round"
             transform={`rotate(${needleAngle} ${size / 2} ${size / 2})`}
-            style={{ transition: 'transform 0.8s cubic-bezier(0.2,0.9,0.25,1)', filter: `drop-shadow(0 0 4px ${hex})` }}
+            style={{ transition: 'transform 0.8s cubic-bezier(0.2,0.9,0.25,1)' }}
           />
-          <circle cx={size / 2} cy={size / 2} r={size * 0.045} fill="#1F222B" stroke="rgba(245,243,236,0.2)" />
+          <circle cx={size / 2} cy={size / 2} r={size * 0.045} fill="var(--panel)" stroke="var(--line-2)" />
         </svg>
         <div className="absolute inset-x-0 flex flex-col items-center" style={{ top: size * 0.32 }}>
           <div className="readout font-semibold leading-none" style={{ fontSize: size * 0.19, color: hex }}>

@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
 import { WorkspaceProvider } from './lib/workspace'
-import Landing from './Landing'
 import Console from './Console'
 
-const SECTION_IDS = ['embed', 'examine', 'attack', 'compare']
+const SECTION_IDS = ['embed', 'examine', 'attack', 'models']
 
 function readHash() {
   const h = window.location.hash.replace(/^#\/?/, '')
   if (SECTION_IDS.includes(h)) return { view: 'console', section: h }
-  return { view: 'landing', section: 'embed' }
+  return { view: 'console', section: 'embed' }
 }
 
 export default function App() {
@@ -24,16 +23,6 @@ export default function App() {
     }
   }, [])
 
-  const enter = () => {
-    window.history.pushState(null, '', '#/embed')
-    setState({ view: 'console', section: 'embed' })
-    window.scrollTo(0, 0)
-  }
-  const toSite = () => {
-    window.history.pushState(null, '', '#/')
-    setState({ view: 'landing', section: 'embed' })
-    window.scrollTo(0, 0)
-  }
   const setSection = (s) => setState({ view: 'console', section: s })
 
   return (
@@ -41,9 +30,7 @@ export default function App() {
       <div className="relative min-h-screen">
         <div className="grid-floor" aria-hidden="true" />
         <div className="glow-floor" aria-hidden="true" />
-        {view === 'landing'
-          ? <Landing enter={enter} />
-          : <Console section={section} setSection={setSection} toSite={toSite} />}
+        <Console section={section} setSection={setSection} />
       </div>
     </WorkspaceProvider>
   )

@@ -131,16 +131,19 @@ export default function Examine({ go }) {
               <SignalMeter variant="bar" value={signalOf(examine) * 100} tone={info.tone} label="Watermark signal strength" sub={`${(signalOf(examine) * 100).toFixed(1)}%`} />
             </div>
 
-            <div className="readout text-[12px] text-mute mt-5 grid gap-1" style={{ maxWidth: 340 }}>
+            <div className="readout text-[12px] text-mute mt-5 grid gap-1.5" style={{ maxWidth: 340 }}>
               <div className="flex justify-between"><span>P(watermark present)</span><span className="text-filament">{(signalOf(examine) * 100).toFixed(1)}%</span></div>
-              <div className="flex justify-between"><span>detector class · confidence</span><span className="text-filament">{examine.prediction === 1 ? 'watermarked' : 'clean'} · {(examine.confidence * 100).toFixed(1)}%</span></div>
-              <div className="flex justify-between"><span>model</span><span className="text-filament">ViT · 2-class</span></div>
+              <div className="flex justify-between"><span>detector class</span><span className="text-filament">{examine.prediction === 1 ? 'watermarked' : 'clean'}</span></div>
+              <div className="flex justify-between"><span>class confidence</span><span className="text-filament">{(examine.confidence * 100).toFixed(1)}%</span></div>
+              <div className="flex justify-between"><span>model architecture</span><span className="text-filament">ViT · 2-class</span></div>
             </div>
 
-            <div className="flex gap-2 mt-6">
-              <button className="btn btn-ghost" onClick={() => { setFile(null); setExamine(null) }}>Examine another</button>
+            <div className="flex flex-col gap-2 mt-6 w-full">
+              <button className="btn btn-ghost w-full" onClick={() => { setFile(null); setExamine(null) }}>Examine another</button>
               {(marks.ae || marks.vae) && (
-                <button className="btn btn-trace" onClick={() => go('attack')}>See it degrade under attack →</button>
+                <button className="btn btn-trace w-full text-center" onClick={() => go('attack')}>
+                  See it degrade under attack →
+                </button>
               )}
             </div>
           </div>

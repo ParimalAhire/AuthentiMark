@@ -3,7 +3,7 @@ import { useWorkspace } from './lib/workspace'
 import Embed from './sections/Embed'
 import Examine from './sections/Examine'
 import Attack from './sections/Attack'
-import Compare from './sections/Compare'
+import ModelsDetails from './sections/ModelsDetails'
 
 const Icon = ({ d, className = 'w-4 h-4' }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -25,8 +25,8 @@ const SECTIONS = [
     icon: <Icon d={<><path d="M14.5 3.5 3.5 14.5 M9.5 3.5l11 11" /><path d="M12 8 8 12l4 4 4-4Z" /></>} />
   },
   {
-    id: 'compare', label: 'Compare', blurb: 'AE vs VAE — quality and robustness, side by side',
-    icon: <Icon d={<><path d="M5 21V9M12 21V4M19 21v-8" /></>} />
+    id: 'models', label: 'Model Details', blurb: 'View performance specifications, training curves, and analysis metrics',
+    icon: <Icon d={<><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /></>} />
   }
 ]
 
@@ -60,7 +60,7 @@ function SpecimenStrip() {
   )
 }
 
-export default function Console({ section, setSection, toSite }) {
+export default function Console({ section, setSection }) {
   const meta = SECTIONS.find((s) => s.id === section) || SECTIONS[0]
   const { marks, timeline } = useWorkspace()
   const [online, setOnline] = useState(null)
@@ -81,12 +81,15 @@ export default function Console({ section, setSection, toSite }) {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row relative z-10">
       {/* rail */}
-      <aside className="lg:w-[210px] shrink-0 border-b lg:border-b-0 lg:border-r border-[var(--line)] bg-[var(--panel)]/70 backdrop-blur-sm sticky top-0 z-30 lg:h-screen">
+      <aside className="lg:w-[210px] shrink-0 border-b lg:border-b-0 lg:border-r border-[var(--line)] bg-[var(--panel)] sticky top-0 z-30 lg:h-screen">
         <div className="px-3 py-2.5 lg:p-5 flex lg:flex-col gap-2 lg:gap-6 w-full items-center lg:items-stretch">
-          <button onClick={toSite} className="flex items-center gap-2 shrink-0" aria-label="Back to landing page">
-            <span className="w-5 h-5 rounded-md" style={{ background: 'linear-gradient(135deg, var(--trace), var(--signal))' }} />
-            <span className="display-wide text-[13px] hidden lg:block">AuthentiMark</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0 select-none">
+            <svg className="w-5 h-5 text-[var(--trace)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+            <span className="font-display font-black text-[13px] tracking-[0.16em] uppercase hidden lg:block" style={{ color: 'var(--filament)' }}>AuthentiMark</span>
+          </div>
 
           <nav className="flex lg:flex-col gap-1 flex-1 lg:overflow-visible overflow-x-auto no-scrollbar">
             {SECTIONS.map((s) => (
@@ -106,16 +109,12 @@ export default function Console({ section, setSection, toSite }) {
             <p className="tag mb-3">Workspace</p>
             <SpecimenStrip />
           </div>
-
-          <button onClick={toSite} className="tag hidden lg:block hover:text-filament text-left" style={{ background: 'none', border: 0, cursor: 'pointer' }}>
-            ← Back to site
-          </button>
         </div>
       </aside>
 
       {/* main */}
       <main className="flex-1 min-w-0 flex flex-col min-h-screen">
-        <div className="flex-1 p-5 sm:p-8 lg:p-12 max-w-[1180px] w-full">
+        <div className="flex-1 p-5 sm:p-8 lg:p-12 max-w-[1000px] w-full mx-auto">
           <header className="mb-8">
             <p className="tag mb-2">Console · {String(SECTIONS.findIndex((s) => s.id === section) + 1).padStart(2, '0')} / 04</p>
             <h1 className="display-xl text-[clamp(2.2rem,5vw,3.4rem)]">{meta.label}</h1>
@@ -125,7 +124,7 @@ export default function Console({ section, setSection, toSite }) {
           {section === 'embed' && <Embed go={setSection} />}
           {section === 'examine' && <Examine go={setSection} />}
           {section === 'attack' && <Attack go={setSection} />}
-          {section === 'compare' && <Compare go={setSection} />}
+          {section === 'models' && <ModelsDetails />}
         </div>
 
         <footer className="border-t border-[var(--line)] px-5 sm:px-8 lg:px-12 py-3 flex flex-wrap items-center gap-x-6 gap-y-1 readout text-[10px] text-mute">

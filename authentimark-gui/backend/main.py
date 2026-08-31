@@ -107,14 +107,15 @@ async def detect(file: UploadFile = File(...)):
 async def generate_image(prompt: str = Form(...)):
     try:
         import urllib.parse
-        import requests
+        import urllib.request
         encoded_prompt = urllib.parse.quote(prompt)
         url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=512&nologo=true"
-        r = requests.get(url, timeout=12)
-        if r.status_code == 200:
-            img_bytes = r.content
-            img_str = base64.b64encode(img_bytes).decode("utf-8")
-            return {"imageUrl": f"data:image/png;base64,{img_str}"}
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            if r.status == 200:
+                img_bytes = r.read()
+                img_str = base64.b64encode(img_bytes).decode("utf-8")
+                return {"imageUrl": f"data:image/png;base64,{img_str}"}
     except Exception:
         pass
         

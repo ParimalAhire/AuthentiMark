@@ -5,7 +5,12 @@ import { ATTACKS, ATTACK_BY_KEY, activeAttacks, attackSummary, runAttackChain } 
 import { detectWatermark, watermarkImage } from '../api'
 import { signalOf, verdictFromSignal, VIcon } from '../lib/verdict.jsx'
 
-const TONE_HEX = { signal: '#4ADE80', caution: '#FBBF24', break: '#FB5D5D' }
+const TONE_HEX = {
+  signal: 'var(--signal)',
+  caution: 'var(--caution)',
+  break: 'var(--break)',
+  trace: 'var(--trace)'
+}
 const idleState = () => Object.fromEntries(ATTACKS.map((a) => [a.key, a.idle]))
 
 function Fader({ spec, value, onChange }) {
@@ -13,12 +18,19 @@ function Fader({ spec, value, onChange }) {
   const pct = active ? ((value - spec.min) / (spec.max - spec.min)) * 100 : 0
   return (
     <div
-      className="panel-inset p-3.5"
-      style={{ borderColor: active ? 'rgba(91,141,239,0.5)' : undefined }}
+      className="panel-inset p-3.5 transition-all"
+      style={{
+        borderColor: active ? 'var(--trace)' : undefined,
+        borderWidth: active ? '1.5px' : undefined,
+        background: active ? 'rgba(153, 183, 245, 0.04)' : undefined,
+        boxShadow: active ? '0 2px 10px rgba(153, 183, 245, 0.08)' : undefined
+      }}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="tag" style={{ color: active ? 'var(--trace)' : undefined }}>{spec.label}</span>
-        <span className="readout text-[12px]" style={{ color: active ? 'var(--filament)' : 'var(--mute)' }}>
+        <span className="font-sans font-bold text-[11px] uppercase tracking-wider" style={{ color: active ? 'var(--trace)' : 'var(--filament)' }}>
+          {spec.label}
+        </span>
+        <span className="readout font-mono font-bold text-[11.5px]" style={{ color: active ? 'var(--trace)' : 'var(--mute)' }}>
           {spec.format(value)}
         </span>
       </div>
@@ -30,19 +42,19 @@ function Fader({ spec, value, onChange }) {
         onChange={(e) => onChange(spec.key, parseFloat(e.target.value))}
         aria-label={`${spec.label}: ${spec.format(value)}`}
       />
-      <div className="flex items-center justify-between mt-1">
+      <div className="flex items-center justify-between mt-1.5">
         <button
-          className="tag hover:text-filament"
+          className="font-sans text-[9px] uppercase tracking-wider font-semibold text-mute hover:text-filament transition-colors"
           style={{ background: 'none', border: 0, cursor: 'pointer', padding: 0 }}
           onClick={() => onChange(spec.key, spec.idle)}
         >
           reset
         </button>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1">
           {spec.presets.map((p) => (
             <button
               key={p.at}
-              className="chip !py-1 !px-2"
+              className="chip font-sans text-[8.5px] uppercase tracking-wider !py-0.5 !px-1.5"
               data-on={Math.abs(value - p.at) < (spec.step || 0.01)}
               onClick={() => onChange(spec.key, p.at)}
             >
@@ -63,13 +75,13 @@ function ThreeUp({ label, originalUrl, cleanUrl, attackedUrl, rendering, tag, ps
   ]
   return (
     <div>
-      {label && <p className="tag mb-2">{label}</p>}
+      {label && <h4 className="font-display font-semibold text-[13px] tracking-wider uppercase mb-2 text-mute">{label}</h4>}
       <div className="grid grid-cols-3 gap-3">
         {cells.map((c, i) => (
           <figure key={i} className={`frame ${i === 2 && rendering ? 'rendering' : ''}`}>
             <span
               className="frame-label"
-              style={{ color: i === 1 ? 'var(--signal)' : i === 2 ? 'var(--caution)' : 'var(--mute)' }}
+              style={{ color: i === 1 ? 'var(--trace)' : i === 2 ? 'var(--caution)' : 'var(--mute)' }}
             >
               {c.t}
             </span>
@@ -205,7 +217,7 @@ export default function Attack({ go }) {
 
   if (!haveAny) {
     return (
-      <div className="panel p-8 max-w-lg">
+      <div className="panel p-8 max-w-lg mx-auto">
         <h2 className="text-[1.6rem] mb-2">No watermarked image yet</h2>
         <p className="text-mute text-[14px] mb-6 max-w-sm">
           The attack bench needs a watermarked image to degrade. Make one in Embed, or start from a sample.
@@ -272,7 +284,7 @@ export default function Attack({ go }) {
       )}
 
       {/* image comparison */}
-      <div className="space-y-5 max-w-4xl">
+      <div className="space-y-5 max-w-4xl mx-auto">
         {methods.map((m) => (
           <ThreeUp
             key={m}
@@ -285,7 +297,7 @@ export default function Attack({ go }) {
             rendering={rendering}
           />
         ))}
-        <p className="tag">
+        <p className="font-sans text-[12px] text-mute">
           {active.length === 0
             ? 'No attack applied — this is the clean watermarked image. Drag a fader to degrade it.'
             : <>Active: <span className="text-filament">{summary}</span>{stale && <span className="text-caution"> · run detection to measure</span>}</>}
@@ -293,8 +305,8 @@ export default function Attack({ go }) {
       </div>
 
       {/* faders */}
-      <div>
-        <p className="tag mb-2">Attack bench — stack any combination</p>
+      <div className="mx-auto max-w-4xl">
+        <h3 className="font-display font-semibold text-[15px] tracking-wider uppercase mb-3 text-mute">Attack Bench — Stack any combination</h3>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {ATTACKS.map((spec) => (
             <Fader key={spec.key} spec={spec} value={attacks[spec.key]} onChange={setOne} />
@@ -303,7 +315,7 @@ export default function Attack({ go }) {
       </div>
 
       {/* readout + timeline */}
-      <div className="grid lg:grid-cols-[auto_minmax(0,1fr)] gap-8 pt-2 items-start max-w-4xl">
+      <div className="grid lg:grid-cols-[auto_minmax(0,1fr)] gap-8 pt-2 items-start max-w-4xl mx-auto">
         <div className="flex gap-6">
           {methods.map((m) => {
             const res = results[m]
@@ -329,10 +341,10 @@ export default function Attack({ go }) {
         </div>
 
         <div className="panel p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="tag">Timeline — {timeline.length} run{timeline.length === 1 ? '' : 's'}</p>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-display font-semibold text-[13px] tracking-wider uppercase text-mute">Timeline — {timeline.length} run{timeline.length === 1 ? '' : 's'}</h4>
             {timeline.length > 0 && (
-              <button className="tag hover:text-filament" style={{ background: 'none', border: 0, cursor: 'pointer' }} onClick={clearTimeline}>clear</button>
+              <button className="font-sans text-[10px] uppercase tracking-wider text-mute hover:text-filament" style={{ background: 'none', border: 0, cursor: 'pointer' }} onClick={clearTimeline}>clear</button>
             )}
           </div>
           {timeline.length === 0 ? (
@@ -348,7 +360,7 @@ export default function Attack({ go }) {
       </div>
 
       {timeline.length >= 3 && (
-        <button className="btn btn-ghost" onClick={() => go('compare')}>See the full AE vs VAE comparison →</button>
+        <button className="btn btn-ghost" onClick={() => go('models')}>See the full AE vs VAE comparison & metrics →</button>
       )}
     </div>
   )

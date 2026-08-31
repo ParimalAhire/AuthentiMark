@@ -40,9 +40,18 @@ export function WorkspaceProvider({ children }) {
 
   const clearTimeline = useCallback(() => setTimeline([]), [])
 
+  const resetWorkspace = useCallback(() => {
+    setSource((prev) => {
+      if (prev?.url) URL.revokeObjectURL(prev.url)
+      return null
+    })
+    setMarks({ ae: null, vae: null })
+    setExamine(null)
+  }, [])
+
   const value = useMemo(
-    () => ({ source, loadSource, marks, setMark, setMarks, examine, setExamine, timeline, pushTimeline, clearTimeline }),
-    [source, loadSource, marks, setMark, examine, timeline, pushTimeline, clearTimeline]
+    () => ({ source, loadSource, marks, setMark, setMarks, examine, setExamine, timeline, pushTimeline, clearTimeline, resetWorkspace }),
+    [source, loadSource, marks, setMark, examine, timeline, pushTimeline, clearTimeline, resetWorkspace]
   )
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>

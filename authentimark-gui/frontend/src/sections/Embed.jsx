@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Dropzone from '../components/Dropzone'
 import { useWorkspace, base64ToFile } from '../lib/workspace'
-import { watermarkImage } from '../api'
+import { watermarkImage, generateImage } from '../api'
 import { buildDiffMap, bitsFromMessage } from '../lib/imaging'
 
 const SAMPLES = [
@@ -30,13 +30,30 @@ function ScoreDial({ label, value, max, unit, good }) {
 }
 
 export default function Embed({ go }) {
-  const { source, loadSource, marks, setMark } = useWorkspace()
+  const { source, loadSource, marks, setMark, resetWorkspace } = useWorkspace()
   const [method, setMethod] = useState('ae')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const [diff, setDiff] = useState(null)
   const [showDiff, setShowDiff] = useState(false)
   const [developing, setDeveloping] = useState(false)
+  const [prompt, setPrompt] = useState('')
+  const [generating, setGenerating] = useState(false)
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return
+    setGenerating(true)
+    setErr(null)
+    try {
+      const data = await generateImage(prompt)
+      const file = base64ToFile(data.imageUrl, `generated_${Date.now()}.png`)
+      loadSource(file)
+    } catch (e) {
+      setErr(e.message || 'Image generation failed. Ensure backend is running.')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   const mark = marks[method]
   const bits = useMemo(() => (mark ? bitsFromMessage(mark.bits) : null), [mark])
@@ -77,14 +94,42 @@ export default function Embed({ go }) {
 
   if (!source) {
     return (
-      <div className="max-w-xl">
-        <Dropzone onFile={loadSource} title="Load an image to watermark" />
-        <p className="tag mt-5 mb-2">Or start from a sample</p>
-        <div className="flex gap-2">
-          {SAMPLES.map((s) => (
-            <button key={s.name} className="chip" onClick={() => loadSample(s.src)}>{s.name}</button>
-          ))}
+      <div className="max-w-xl space-y-6 mx-auto">
+        <div>
+          <Dropzone onFile={loadSource} title="Load an image to watermark" />
+          <p className="tag mt-4 mb-2">Or start from a sample</p>
+          <div className="flex gap-2">
+            {SAMPLES.map((s) => (
+              <button key={s.name} className="chip" onClick={() => loadSample(s.src)}>{s.name}</button>
+            ))}
+          </div>
         </div>
+
+        <div className="panel p-5 border border-[var(--line)]">
+          <p className="tag mb-1.5">AI Image Generator</p>
+          <p className="text-mute text-[13px] mb-4">Enter a text prompt to generate a custom starting image using Pollinations AI.</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="e.g. A serene mountain lake at sunrise, highly detailed..."
+              className="flex-1 px-4 py-2 text-[14px] rounded-lg border border-[var(--line-2)] bg-[var(--panel-2)] text-[var(--filament)] focus:outline-none focus:border-[var(--trace)]"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              disabled={generating}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleGenerate()
+              }}
+            />
+            <button
+              className="btn btn-trace"
+              onClick={handleGenerate}
+              disabled={generating || !prompt.trim()}
+            >
+              {generating ? 'Generating...' : 'Generate'}
+            </button>
+          </div>
+        </div>
+        
         {err && <p className="text-break text-[13px] mt-4">{err}</p>}
       </div>
     )
@@ -113,9 +158,14 @@ export default function Embed({ go }) {
             ))}
           </div>
         </div>
-        <button className="btn btn-lg" onClick={embed} disabled={busy}>
-          {busy ? 'Embedding…' : mark ? 'Re-embed' : 'Embed watermark'}
-        </button>
+        <div className="flex gap-3">
+          <button className="btn btn-lg" onClick={embed} disabled={busy}>
+            {busy ? 'Embedding…' : mark ? 'Re-embed' : 'Embed watermark'}
+          </button>
+          <button className="btn btn-ghost btn-lg" onClick={resetWorkspace} disabled={busy}>
+            Refresh / Clear
+          </button>
+        </div>
       </div>
 
       {busy && <div className="processing-bar max-w-md"><i /></div>}
@@ -166,13 +216,13 @@ export default function Embed({ go }) {
 
           <div>
             <p className="tag mb-2">32-bit signature written into the image</p>
-            <div className="grid grid-cols-16 gap-1" style={{ gridTemplateColumns: 'repeat(16, 1fr)', maxWidth: 420 }}>
+            <div className="grid grid-cols-16 gap-1.5" style={{ gridTemplateColumns: 'repeat(16, 1fr)', maxWidth: 420 }}>
               {bits.map((b, i) => (
                 <span
                   key={i}
-                  className="aspect-square rounded-[2px]"
+                  className="aspect-square rounded-[2px] border border-[var(--line-2)]"
                   style={{
-                    background: b ? 'linear-gradient(135deg, var(--trace), var(--signal))' : 'rgba(245,243,236,0.08)',
+                    background: b ? 'linear-gradient(135deg, var(--trace), var(--signal))' : 'var(--panel-2)',
                     transitionDelay: `${i * 10}ms`
                   }}
                 />
