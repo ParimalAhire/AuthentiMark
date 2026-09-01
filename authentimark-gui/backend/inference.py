@@ -61,6 +61,18 @@ except Exception as e:
     MODELS_LOADED = False
     ERROR_MSG = str(e)
 
+WATERMARK_MAX_SIDE = 1024
+
+
+def _fit_max_side(image, max_side):
+    w, h = image.size
+    longest = max(w, h)
+    if longest <= max_side:
+        return image
+    scale = max_side / longest
+    return image.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+
+
 def watermark_image(image, method):
     if method == "ae":
         encoder = AE_ENCODER
@@ -68,24 +80,29 @@ def watermark_image(image, method):
         encoder = VAE_ENCODER
     else:
         raise ValueError(f"Unknown method {method}")
-        
+
     if encoder is None:
         raise RuntimeError(f"Encoder model for {method} is not loaded.")
-        
-    transform = T.Compose([
-        T.Resize((128, 128)),
-        T.ToTensor()
-    ])
-    img_tensor = transform(image).unsqueeze(0)
+
+    reference = _fit_max_side(image.convert("RGB"), WATERMARK_MAX_SIDE)
+    orig_full = T.ToTensor()(reference).unsqueeze(0)
+    _, _, height, width = orig_full.shape
+    img_128 = T.Resize((128, 128), T.InterpolationMode.BILINEAR)(orig_full)
+
     msg = np.random.randint(0, 2, size=32)
     msg_tensor = torch.tensor(msg, dtype=torch.float32).unsqueeze(0)
-    
+
     with torch.no_grad():
-        wm_tensor = encoder(img_tensor, msg_tensor)
-        
-    img_tensor_out = torch.clamp(wm_tensor.squeeze(0), 0.0, 1.0)
-    wm_image = T.ToPILImage()(img_tensor_out.cpu())
-    return wm_image, msg.tolist()
+        wm_128 = encoder(img_128, msg_tensor)
+
+    residual_128 = wm_128 - img_128
+    residual_full = torch.nn.functional.interpolate(
+        residual_128, size=(height, width), mode="bilinear", align_corners=False
+    )
+    wm_full = torch.clamp(orig_full + residual_full, 0.0, 1.0)
+
+    wm_image = T.ToPILImage()(wm_full.squeeze(0).cpu())
+    return wm_image, reference, msg.tolist()
 
 def detect_watermark(image):
     if DETECTOR is None:
@@ -126,7 +143,8 @@ def attack_noise(image, std):
     noisy = np.clip(arr + noise, 0.0, 1.0)
     return Image.fromarray((noisy * 255.0).astype(np.uint8))
 
-def attack_blur(image, radius):
+def attack_blur(image, strength):
+    radius = max(0.0, float(strength)) * min(image.size)
     return image.filter(ImageFilter.GaussianBlur(radius))
 
 def attack_jpeg(image, quality):
@@ -154,9 +172,9 @@ def attack_screenshot(image, severity):
     # slight downscale + mild recompression + faint blur + tiny brightness lift
     severity = max(0.0, min(1.0, float(severity)))
     out = attack_downscale(image, 1.0 - 0.18 * severity)
-    out = attack_blur(out, 0.4 + 0.8 * severity)
+    out = attack_blur(out, 0.001 + 0.004 * severity)
     out = attack_brightness(out, 1.0 + 0.05 * severity)
-    quality = int(92 - 40 * severity)
+    quality = int(92 - 55 * severity)
     return attack_jpeg(out, quality)
 
 def decode_message(image, method):

@@ -55,12 +55,11 @@ async def watermark(file: UploadFile = File(...), method: str = Form(...)):
         raise HTTPException(status_code=400, detail="Invalid image file.")
 
     try:
-        wm_image, msg = watermark_image(image, method)
-        
-        orig_resized = image.resize((128, 128))
-        orig_arr = np.array(orig_resized)
+        wm_image, reference_image, msg = watermark_image(image, method)
+
+        orig_arr = np.array(reference_image)
         wm_arr = np.array(wm_image)
-        
+
         psnr_val = float(psnr_metric(orig_arr, wm_arr, data_range=255))
         try:
             ssim_val = float(ssim_metric(orig_arr, wm_arr, channel_axis=2, data_range=255))
@@ -105,20 +104,26 @@ async def detect(file: UploadFile = File(...)):
 
 @app.post("/generate-image")
 async def generate_image(prompt: str = Form(...)):
-    try:
-        import urllib.parse
-        import urllib.request
-        encoded_prompt = urllib.parse.quote(prompt)
-        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=512&nologo=true"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            if r.status == 200:
-                img_bytes = r.read()
+    import time
+    import urllib.parse
+    import urllib.request
+
+    encoded_prompt = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=512&nologo=true"
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=25) as r:
+                img_bytes = r.read() if r.status == 200 else b""
+            if len(img_bytes) > 512:
+                content_type = "image/jpeg"
                 img_str = base64.b64encode(img_bytes).decode("utf-8")
-                return {"imageUrl": f"data:image/png;base64,{img_str}"}
-    except Exception:
-        pass
-        
+                return {"imageUrl": f"data:{content_type};base64,{img_str}"}
+        except Exception:
+            pass
+        time.sleep(2)
+
     img = Image.new("RGB", (512, 512))
     draw = ImageDraw.Draw(img)
     for y in range(512):

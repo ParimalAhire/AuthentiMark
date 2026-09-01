@@ -20,7 +20,8 @@ class AEEncoder(nn.Module):
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 3, kernel_size=3, padding=1)
+            nn.Conv2d(32, 3, kernel_size=3, padding=1),
+            nn.Tanh()
         )
 
     def forward(self, img, msg):
@@ -28,7 +29,7 @@ class AEEncoder(nn.Module):
         msg_feat = self.msg_fc(msg).view(batch_size, 1, 128, 128)
         x = torch.cat([img, msg_feat], dim=1)
         residual = self.net(x)
-        return img + self.residual_scale * residual
+        return torch.clamp(img + self.residual_scale * residual, 0.0, 1.0)
 
 class AEDecoder(nn.Module):
     def __init__(self):
@@ -59,8 +60,9 @@ class AEDecoder(nn.Module):
         return self.fc(features)
 
 class VAEEncoder(nn.Module):
-    def __init__(self, latent_channels=64):
+    def __init__(self, latent_channels=64, residual_scale=0.3):
         super().__init__()
+        self.residual_scale = residual_scale
         self.msg_fc = nn.Linear(32, 16384)
         self.trunk = nn.Sequential(
             nn.Conv2d(4, 32, kernel_size=3, padding=1),
@@ -82,7 +84,8 @@ class VAEEncoder(nn.Module):
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 3, kernel_size=3, padding=1)
+            nn.Conv2d(32, 3, kernel_size=3, padding=1),
+            nn.Tanh()
         )
 
     def reparameterize(self, mu, logvar):
@@ -99,7 +102,7 @@ class VAEEncoder(nn.Module):
         logvar = self.logvar_head(feat)
         z = self.reparameterize(mu, logvar)
         decoded = self.decode_trunk(z)
-        return img + decoded
+        return torch.clamp(img + self.residual_scale * decoded, 0.0, 1.0)
 
 class VAEDecoder(nn.Module):
     def __init__(self):

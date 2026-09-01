@@ -349,7 +349,7 @@ export default function Attack({ go }) {
           </div>
           {timeline.length === 0 ? (
             <p className="text-[12px] text-mute py-3">
-              Each detection run lands here. Try JPEG at 95, then 88, then 80 — watch the watermark signal fall off a cliff.
+              Each detection run lands here. Blur past 2% or JPEG below Q8 breaks both. AE also gives way to rotation past ~20° and deep crops; VAE holds through geometry.
             </p>
           ) : (
             <div className="max-h-64 overflow-y-auto pr-1">
