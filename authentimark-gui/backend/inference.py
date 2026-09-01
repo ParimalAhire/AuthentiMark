@@ -72,6 +72,9 @@ def watermark_image(image, method):
     if encoder is None:
         raise RuntimeError(f"Encoder model for {method} is not loaded.")
         
+    # Preserve original resolution to avoid blurriness
+    W, H = image.size
+        
     transform = T.Compose([
         T.Resize((128, 128)),
         T.ToTensor()
@@ -83,8 +86,19 @@ def watermark_image(image, method):
     with torch.no_grad():
         wm_tensor = encoder(img_tensor, msg_tensor)
         
-    img_tensor_out = torch.clamp(wm_tensor.squeeze(0), 0.0, 1.0)
-    wm_image = T.ToPILImage()(img_tensor_out.cpu())
+    # Extract the residual watermark pattern
+    residual = wm_tensor - img_tensor
+    
+    # Resize the residual back to the original image dimensions
+    residual_highres = torch.nn.functional.interpolate(
+        residual, size=(H, W), mode='bilinear', align_corners=False
+    )
+    
+    # Add high-resolution residual to high-resolution original image
+    orig_tensor = T.ToTensor()(image).unsqueeze(0)
+    wm_tensor_highres = torch.clamp(orig_tensor + residual_highres, 0.0, 1.0)
+    
+    wm_image = T.ToPILImage()(wm_tensor_highres.squeeze(0).cpu())
     return wm_image, msg.tolist()
 
 def detect_watermark(image):

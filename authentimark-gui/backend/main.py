@@ -59,7 +59,8 @@ async def watermark(file: UploadFile = File(...), method: str = Form(...)):
         
         orig_resized = image.resize((128, 128))
         orig_arr = np.array(orig_resized)
-        wm_arr = np.array(wm_image)
+        wm_resized = wm_image.resize((128, 128))
+        wm_arr = np.array(wm_resized)
         
         psnr_val = float(psnr_metric(orig_arr, wm_arr, data_range=255))
         try:

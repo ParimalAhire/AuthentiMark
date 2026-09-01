@@ -59,8 +59,9 @@ class AEDecoder(nn.Module):
         return self.fc(features)
 
 class VAEEncoder(nn.Module):
-    def __init__(self, latent_channels=64):
+    def __init__(self, latent_channels=64, residual_scale=0.3):
         super().__init__()
+        self.residual_scale = residual_scale
         self.msg_fc = nn.Linear(32, 16384)
         self.trunk = nn.Sequential(
             nn.Conv2d(4, 32, kernel_size=3, padding=1),
@@ -99,7 +100,7 @@ class VAEEncoder(nn.Module):
         logvar = self.logvar_head(feat)
         z = self.reparameterize(mu, logvar)
         decoded = self.decode_trunk(z)
-        return img + decoded
+        return img + self.residual_scale * decoded
 
 class VAEDecoder(nn.Module):
     def __init__(self):
