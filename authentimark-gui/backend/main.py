@@ -1,4 +1,5 @@
 import io
+import os
 import json
 import base64
 import numpy as np
@@ -26,9 +27,15 @@ from .inference import (
 
 app = FastAPI(title="AuthentiMark API")
 
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

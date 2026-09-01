@@ -9,14 +9,35 @@ from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, WatermarkDetec
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
+HF_MODEL_REPO = os.environ.get("HF_MODEL_REPO", "").strip()
+HF_TOKEN = os.environ.get("HF_TOKEN", "").strip() or None
+
 def check_model_exists(filename):
     path = os.path.join(MODELS_DIR, filename)
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"Required model checkpoint '{filename}' was not found in "
-            f"'{MODELS_DIR}'. Please copy it from Google Drive before starting."
+    if os.path.exists(path):
+        return path
+
+    if HF_MODEL_REPO:
+        from huggingface_hub import hf_hub_download
+        os.makedirs(MODELS_DIR, exist_ok=True)
+        hf_hub_download(
+            repo_id=HF_MODEL_REPO,
+            filename=filename,
+            repo_type="model",
+            local_dir=MODELS_DIR,
+            token=HF_TOKEN,
         )
-    return path
+        if os.path.exists(path):
+            return path
+        raise FileNotFoundError(
+            f"Downloaded '{filename}' from Hugging Face repo '{HF_MODEL_REPO}' "
+            f"but it was not found at '{path}'."
+        )
+
+    raise FileNotFoundError(
+        f"Required model checkpoint '{filename}' was not found in "
+        f"'{MODELS_DIR}'. Please copy it from Google Drive before starting."
+    )
 
 def load_ae():
     ae_path = check_model_exists("ae_latest.pt")

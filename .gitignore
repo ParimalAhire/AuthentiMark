@@ -39,6 +39,11 @@ env/
 .env.local
 .env.*.local
 
+# VITE_API_URL is the public backend URL, not a secret. Vite needs .env.production
+# at build time (Render builds from the repo), so it is intentionally committed.
+!.env.production
+!.env.example
+
 # ───────────────────────────── Logs ────────────────────────────
 *.log
 npm-debug.log*
