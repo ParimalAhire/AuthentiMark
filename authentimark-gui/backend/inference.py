@@ -41,12 +41,28 @@ def load_vae():
     return encoder, decoder
 
 def load_detector():
-    det_path = check_model_exists("detector_latest.pt")
-    detector = WatermarkDetector()
-    checkpoint = torch.load(det_path, map_location="cpu")
-    detector.load_state_dict(checkpoint["model"])
-    detector.eval()
-    return detector
+    quant_path = os.path.join(MODELS_DIR, "detector_quantized.pt")
+    orig_path = os.path.join(MODELS_DIR, "detector_latest.pt")
+    
+    if os.path.exists(quant_path):
+        base_model = WatermarkDetector()
+        detector = torch.quantization.quantize_dynamic(
+            base_model, {torch.nn.Linear}, dtype=torch.qint8
+        )
+        checkpoint = torch.load(quant_path, map_location="cpu")
+        detector.load_state_dict(checkpoint["model"])
+        detector.eval()
+        return detector
+    elif os.path.exists(orig_path):
+        detector = WatermarkDetector()
+        checkpoint = torch.load(orig_path, map_location="cpu")
+        detector.load_state_dict(checkpoint["model"])
+        detector.eval()
+        return detector
+    else:
+        raise FileNotFoundError(
+            f"Required detector checkpoint ('detector_quantized.pt' or 'detector_latest.pt') was not found in '{MODELS_DIR}'."
+        )
 
 try:
     AE_ENCODER, AE_DECODER = load_ae()

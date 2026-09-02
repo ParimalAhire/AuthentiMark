@@ -10,7 +10,7 @@ build/
 *.tsbuildinfo
 
 # ─────────────── Trained model checkpoints (large) ──────────────
-# distributed separately (Google Drive) — never commit
+# Ignore all model weights by default
 models/
 authentimark-gui/models/
 *.pt
@@ -20,6 +20,21 @@ authentimark-gui/models/
 *.onnx
 *.h5
 *.pkl
+
+# Allow lightweight checkpoints (<100MB) for production deployment
+!authentimark-gui/models/
+!authentimark-gui/models/ae_latest.pt
+!authentimark-gui/models/vae_latest.pt
+!authentimark-gui/models/detector_quantized.pt
+
+# ──────────────────────── Study Material ───────────────────────
+[sS]tudy*[mM]aterial/
+[sS]tudy*[mM]aterial*/
+study material/
+Study Material/
+study_material/
+StudyMaterial/
+*[sS]tudy*[mM]aterial*
 
 # ───────────────────────────── Python ──────────────────────────
 __pycache__/
