@@ -26,6 +26,7 @@ authentimark-gui/models/
 !authentimark-gui/models/ae_latest.pt
 !authentimark-gui/models/vae_latest.pt
 !authentimark-gui/models/detector_quantized.pt
+!authentimark-gui/models/detector_quantized_model.pt
 
 # ──────────────────────── Study Material ───────────────────────
 [sS]tudy*[mM]aterial/

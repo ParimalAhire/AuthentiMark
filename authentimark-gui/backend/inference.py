@@ -52,9 +52,20 @@ def get_vae():
 def get_detector():
     global _DETECTOR
     if _DETECTOR is None:
+        full_quant_path = os.path.join(MODELS_DIR, "detector_quantized_model.pt")
         quant_path = os.path.join(MODELS_DIR, "detector_quantized.pt")
         orig_path = os.path.join(MODELS_DIR, "detector_latest.pt")
         
+        # Priority 1: Load pre-quantized model object directly (uses only 85MB RAM with 0 spike)
+        if os.path.exists(full_quant_path):
+            try:
+                _DETECTOR = torch.load(full_quant_path, map_location="cpu", weights_only=False)
+            except Exception:
+                _DETECTOR = torch.load(full_quant_path, map_location="cpu")
+            _DETECTOR.eval()
+            return _DETECTOR
+
+        # Priority 2: State dict quantization
         if os.path.exists(quant_path):
             base_model = WatermarkDetector()
             detector = torch.quantization.quantize_dynamic(
@@ -64,14 +75,17 @@ def get_detector():
             detector.load_state_dict(checkpoint["model"])
             detector.eval()
             _DETECTOR = detector
-        elif os.path.exists(orig_path):
+            return _DETECTOR
+            
+        if os.path.exists(orig_path):
             detector = WatermarkDetector()
             checkpoint = torch.load(orig_path, map_location="cpu")
             detector.load_state_dict(checkpoint["model"])
             detector.eval()
             _DETECTOR = detector
-        else:
-            raise FileNotFoundError(f"Detector checkpoint ('detector_quantized.pt' or 'detector_latest.pt') was not found in '{MODELS_DIR}'.")
+            return _DETECTOR
+            
+        raise FileNotFoundError(f"Detector checkpoint ('detector_quantized_model.pt' or 'detector_quantized.pt') not found in '{MODELS_DIR}'.")
     return _DETECTOR
 
 def check_models_ready():

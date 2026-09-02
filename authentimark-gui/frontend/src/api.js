@@ -1,4 +1,4 @@
-const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+const BASE_URL = 'https://authentimark-api.onrender.com'
 
 export async function watermarkImage(file, method) {
   const formData = new FormData()
@@ -11,7 +11,7 @@ export async function watermarkImage(file, method) {
   })
   
   if (!response.ok) {
-    const err = await response.json()
+    const err = await response.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to watermark image')
   }
   
@@ -28,8 +28,27 @@ export async function detectWatermark(file) {
   })
   
   if (!response.ok) {
-    const err = await response.json()
+    const err = await response.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to detect watermark')
+  }
+  
+  return response.json()
+}
+
+export async function simulateAttack(file, attackType, paramValue) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('attack_type', attackType)
+  formData.append('param_value', paramValue)
+  
+  const response = await fetch(`${BASE_URL}/attack`, {
+    method: 'POST',
+    body: formData
+  })
+  
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to simulate attack')
   }
   
   return response.json()
@@ -45,27 +64,26 @@ export async function generateImage(prompt) {
   })
   
   if (!response.ok) {
-    const err = await response.json()
+    const err = await response.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to generate image')
   }
   
   return response.json()
 }
 
-export async function simulateAttack(file, attackType, intensity) {
+export async function decodeMessage(file, method) {
   const formData = new FormData()
   formData.append('file', file)
-  formData.append('attackType', attackType)
-  formData.append('intensity', intensity)
+  formData.append('method', method)
   
-  const response = await fetch(`${BASE_URL}/simulate-attack`, {
+  const response = await fetch(`${BASE_URL}/decode`, {
     method: 'POST',
     body: formData
   })
   
   if (!response.ok) {
-    const err = await response.json()
-    throw new Error(err.detail || 'Failed to simulate attack')
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to decode message')
   }
   
   return response.json()
