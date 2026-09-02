@@ -4,7 +4,6 @@ torchvision
 fastapi
 uvicorn
 python-multipart
-transformers
 pillow
 numpy
 scikit-image
