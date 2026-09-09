@@ -1,4 +1,4 @@
-import { simulateAttack } from '../api'
+import { simulateAttackChain } from '../api'
 import { base64ToFile } from './workspace'
 
 /* Every attack maps to a real backend function in
@@ -87,15 +87,16 @@ export function attackSummary(state) {
   return activeAttacks(state).map(({ spec, value }) => `${spec.label.split(' ')[0]} ${spec.format(value)}`)
 }
 
-/* Run the active attacks as a chain of real /simulate-attack calls,
-   feeding each result into the next, and return the final File. */
+/* Run the active attacks as a single batched /simulate-attack-chain call.
+   The backend applies them in this exact order in one in-memory pass and
+   returns a lossless PNG, so the result is identical to feeding each
+   attack's output into the next — just without the extra round-trips. */
 export async function runAttackChain(startFile, state) {
   const chain = activeAttacks(state)
   if (chain.length === 0) return startFile
-  let file = startFile
-  for (const { key, value } of chain) {
-    const data = await simulateAttack(file, key, value)
-    file = base64ToFile(data.attackedImageUrl, `atk_${key}.png`)
-  }
-  return file
+  const data = await simulateAttackChain(
+    startFile,
+    chain.map(({ key, value }) => ({ type: key, intensity: value }))
+  )
+  return base64ToFile(data.attackedImageUrl, 'attacked.png')
 }

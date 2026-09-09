@@ -26,6 +26,33 @@ from .inference import (
 
 app = FastAPI(title="AuthentiMark API")
 
+# Single source of truth for attack dispatch, shared by the single-shot
+# /simulate-attack endpoint and the batched /simulate-attack-chain endpoint.
+_ATTACK_FNS = {
+    "crop": attack_crop,
+    "rotate": attack_rotate,
+    "noise": attack_noise,
+    "blur": attack_blur,
+    "jpeg": attack_jpeg,
+    "brightness": attack_brightness,
+    "downscale": attack_downscale,
+    "screenshot": attack_screenshot,
+}
+
+
+def apply_attack(image, attack_type, intensity):
+    fn = _ATTACK_FNS.get(attack_type)
+    if fn is None:
+        return image
+    return fn(image, float(intensity))
+
+
+def encode_png_data_url(image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{img_str}"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -147,32 +174,41 @@ async def simulate_attack(
         raise HTTPException(status_code=400, detail="Invalid image file.")
         
     try:
-        if attackType == "crop":
-            attacked_image = attack_crop(image, intensity)
-        elif attackType == "rotate":
-            attacked_image = attack_rotate(image, intensity)
-        elif attackType == "noise":
-            attacked_image = attack_noise(image, intensity)
-        elif attackType == "blur":
-            attacked_image = attack_blur(image, intensity)
-        elif attackType == "jpeg":
-            attacked_image = attack_jpeg(image, intensity)
-        elif attackType == "brightness":
-            attacked_image = attack_brightness(image, intensity)
-        elif attackType == "downscale":
-            attacked_image = attack_downscale(image, intensity)
-        elif attackType == "screenshot":
-            attacked_image = attack_screenshot(image, intensity)
-        else:
-            attacked_image = image
-            
-        buffered = io.BytesIO()
-        attacked_image.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        image_url = f"data:image/png;base64,{img_str}"
-        
-        return {
-            "attackedImageUrl": image_url
-        }
+        attacked_image = apply_attack(image, attackType, intensity)
+        return {"attackedImageUrl": encode_png_data_url(attacked_image)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/simulate-attack-chain")
+async def simulate_attack_chain(
+    file: UploadFile = File(...),
+    chain: str = Form(...)
+):
+    """Apply an ordered list of attacks in a single in-memory pass.
+
+    `chain` is a JSON array of {"type": <attack>, "intensity": <float>}.
+    Equivalent to calling /simulate-attack repeatedly and feeding each
+    result into the next, but without the intermediate encode/decode and
+    network round-trips. Output is lossless PNG, so image quality and the
+    detector verdict are identical to the step-by-step path.
+    """
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file.")
+
+    try:
+        steps = json.loads(chain)
+        if not isinstance(steps, list):
+            raise ValueError("chain must be a JSON array")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid attack chain.")
+
+    try:
+        for step in steps:
+            image = apply_attack(image, step["type"], step["intensity"])
+        return {"attackedImageUrl": encode_png_data_url(image)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useWorkspace } from './lib/workspace'
+import { checkHealth } from './api'
 import Embed from './sections/Embed'
 import Examine from './sections/Examine'
 import Attack from './sections/Attack'
@@ -71,8 +72,7 @@ export default function Console({ section, setSection }) {
 
   useEffect(() => {
     let alive = true
-    fetch('http://localhost:8000/health')
-      .then((r) => r.json())
+    checkHealth()
       .then((d) => alive && setOnline(d.status === 'ok'))
       .catch(() => alive && setOnline(false))
     return () => { alive = false }

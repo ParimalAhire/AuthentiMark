@@ -6,8 +6,10 @@ import torchvision.transforms as T
 from PIL import Image, ImageFilter, ImageEnhance
 from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, WatermarkDetector, prepare_for_vit
 
-# Limit PyTorch CPU thread pools to 1 to reduce baseline RAM in 512MB containers
-torch.set_num_threads(1)
+# Use both vCPUs for inference. The EC2 host has 2 cores; a swapfile covers
+# the model-load spike, so pinning to 1 thread only slowed embed/detect with
+# no real RAM saving. Overridable via TORCH_NUM_THREADS.
+torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "2")))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
@@ -52,31 +54,9 @@ def get_vae():
 def get_detector():
     global _DETECTOR
     if _DETECTOR is None:
-        full_quant_path = os.path.join(MODELS_DIR, "detector_quantized_model.pt")
-        quant_path = os.path.join(MODELS_DIR, "detector_quantized.pt")
         orig_path = os.path.join(MODELS_DIR, "detector_latest.pt")
         
-        # Priority 1: Load pre-quantized model object directly (uses only 85MB RAM with 0 spike)
-        if os.path.exists(full_quant_path):
-            try:
-                _DETECTOR = torch.load(full_quant_path, map_location="cpu", weights_only=False)
-            except Exception:
-                _DETECTOR = torch.load(full_quant_path, map_location="cpu")
-            _DETECTOR.eval()
-            return _DETECTOR
-
-        # Priority 2: State dict quantization
-        if os.path.exists(quant_path):
-            base_model = WatermarkDetector()
-            detector = torch.quantization.quantize_dynamic(
-                base_model, {torch.nn.Linear}, dtype=torch.qint8
-            )
-            checkpoint = torch.load(quant_path, map_location="cpu")
-            detector.load_state_dict(checkpoint["model"])
-            detector.eval()
-            _DETECTOR = detector
-            return _DETECTOR
-            
+        # Load original full-precision model (detector_latest.pt)
         if os.path.exists(orig_path):
             detector = WatermarkDetector()
             checkpoint = torch.load(orig_path, map_location="cpu")
@@ -84,14 +64,31 @@ def get_detector():
             detector.eval()
             _DETECTOR = detector
             return _DETECTOR
+
+        # ─── Quantized model fallbacks (Commented out to enforce original model only) ───
+        # full_quant_path = os.path.join(MODELS_DIR, "detector_quantized_model.pt")
+        # if os.path.exists(full_quant_path):
+        #     _DETECTOR = torch.load(full_quant_path, map_location="cpu", weights_only=False)
+        #     _DETECTOR.eval()
+        #     return _DETECTOR
+        #
+        # quant_path = os.path.join(MODELS_DIR, "detector_quantized.pt")
+        # if os.path.exists(quant_path):
+        #     base_model = WatermarkDetector()
+        #     detector = torch.quantization.quantize_dynamic(base_model, {torch.nn.Linear}, dtype=torch.qint8)
+        #     checkpoint = torch.load(quant_path, map_location="cpu")
+        #     detector.load_state_dict(checkpoint["model"])
+        #     detector.eval()
+        #     _DETECTOR = detector
+        #     return _DETECTOR
             
-        raise FileNotFoundError(f"Detector checkpoint ('detector_quantized_model.pt' or 'detector_quantized.pt') not found in '{MODELS_DIR}'.")
+        raise FileNotFoundError(f"Original detector checkpoint 'detector_latest.pt' was not found in '{MODELS_DIR}'.")
     return _DETECTOR
 
 def check_models_ready():
     ae_ok = os.path.exists(os.path.join(MODELS_DIR, "ae_latest.pt"))
     vae_ok = os.path.exists(os.path.join(MODELS_DIR, "vae_latest.pt"))
-    det_ok = os.path.exists(os.path.join(MODELS_DIR, "detector_quantized.pt")) or os.path.exists(os.path.join(MODELS_DIR, "detector_latest.pt"))
+    det_ok = os.path.exists(os.path.join(MODELS_DIR, "detector_latest.pt"))
     return ae_ok and vae_ok and det_ok
 
 # For backward compatibility

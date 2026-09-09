@@ -55,6 +55,11 @@ env/
 .env.local
 .env.*.local
 
+# SSH keys / certs — never commit
+*.pem
+*.key
+temp-key.pem
+
 # ───────────────────────────── Logs ────────────────────────────
 *.log
 npm-debug.log*
@@ -79,3 +84,6 @@ desktop.ini
 scratch/
 tmp/
 *.tmp
+
+# Local-only docs / reports / exports - not tracked
+docs/

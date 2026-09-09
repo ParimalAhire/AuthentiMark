@@ -142,13 +142,16 @@ export default function Attack({ go }) {
     try {
       const next = { ...attackedUrls }
       const nextF = { ...attackedFiles }
-      for (const m of methods) {
-        if (!marks[m]) continue
-        const f = await runAttackChain(marks[m].file, attacks)
-        if (runId.current !== mine) return
+      const targets = methods.filter((m) => marks[m])
+      const rendered = await Promise.all(
+        targets.map((m) => runAttackChain(marks[m].file, attacks))
+      )
+      if (runId.current !== mine) return
+      targets.forEach((m, i) => {
+        const f = rendered[i]
         nextF[m] = f
         next[m] = active.length ? URL.createObjectURL(f) : marks[m].url
-      }
+      })
       setAttackedUrls(next)
       setAttackedFiles(nextF)
     } catch (e) {
@@ -174,18 +177,19 @@ export default function Attack({ go }) {
     setDetecting(true)
     setErr(null)
     try {
-      for (const m of methods) {
-        const f = attackedFiles[m] || marks[m]?.file
-        if (!f) continue
-        const data = await detectWatermark(f)
-        setResults((r) => ({ ...r, [m]: data }))
+      const targets = methods.filter((m) => attackedFiles[m] || marks[m]?.file)
+      const data = await Promise.all(
+        targets.map((m) => detectWatermark(attackedFiles[m] || marks[m].file))
+      )
+      targets.forEach((m, i) => {
+        setResults((r) => ({ ...r, [m]: data[i] }))
         pushTimeline({
           label: summary,
           target: m,
-          signal: signalOf(data),
-          verdict: data.verdict
+          signal: signalOf(data[i]),
+          verdict: data[i].verdict
         })
-      }
+      })
       setStale(false)
     } catch (e) {
       setErr(e.message || 'The detector did not respond. Check the backend and try again.')
@@ -200,14 +204,15 @@ export default function Attack({ go }) {
     try {
       const blob = await (await fetch('/samples/sample-portrait.jpg')).blob()
       const f = new File([blob], 'sample-portrait.jpg', { type: 'image/jpeg' })
-      for (const m of ['ae', 'vae']) {
-        const data = await watermarkImage(f, m)
+      const marked = await Promise.all(['ae', 'vae'].map((m) => watermarkImage(f, m)))
+      ;['ae', 'vae'].forEach((m, i) => {
+        const data = marked[i]
         setMark(m, {
           url: data.watermarkedImageUrl,
           file: base64ToFile(data.watermarkedImageUrl, `${m}_marked.png`),
           psnr: data.psnr, ssim: data.ssim, bits: data.message
         })
-      }
+      })
     } catch (e) {
       setErr("Couldn't prepare a sample. Try the Embed section with your own image.")
     } finally {
