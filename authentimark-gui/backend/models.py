@@ -58,6 +58,14 @@ class AEDecoder(nn.Module):
         features = features.view(features.size(0), -1)
         return self.fc(features)
 
+class GANEncoder(AEEncoder):
+    """Adversarial Generator for invisible watermark embedding."""
+    pass
+
+class GANDecoder(AEDecoder):
+    """Adversarial Extractor for 32-bit watermark recovery."""
+    pass
+
 class VAEEncoder(nn.Module):
     def __init__(self, latent_channels=64, residual_scale=0.3):
         super().__init__()

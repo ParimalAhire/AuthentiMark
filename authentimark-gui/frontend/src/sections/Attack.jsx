@@ -115,23 +115,23 @@ function TimelineRow({ entry }) {
 
 export default function Attack({ go }) {
   const { source, marks, setMark, timeline, pushTimeline, clearTimeline } = useWorkspace()
-  const haveAny = marks.ae || marks.vae
+  const haveAny = marks.ae || marks.vae || marks.gan
 
-  const [target, setTarget] = useState(marks.ae ? 'ae' : 'vae')
+  const [target, setTarget] = useState(marks.ae ? 'ae' : marks.vae ? 'vae' : 'gan')
   const [compare, setCompare] = useState(false)
   const [attacks, setAttacks] = useState(idleState)
-  const [attackedUrls, setAttackedUrls] = useState({ ae: null, vae: null })
-  const [attackedFiles, setAttackedFiles] = useState({ ae: null, vae: null })
+  const [attackedUrls, setAttackedUrls] = useState({ ae: null, vae: null, gan: null })
+  const [attackedFiles, setAttackedFiles] = useState({ ae: null, vae: null, gan: null })
   const [rendering, setRendering] = useState(false)
   const [detecting, setDetecting] = useState(false)
-  const [results, setResults] = useState({ ae: null, vae: null })
+  const [results, setResults] = useState({ ae: null, vae: null, gan: null })
   const [stale, setStale] = useState(false)
   const [sampleBusy, setSampleBusy] = useState(false)
   const [err, setErr] = useState(null)
   const debRef = useRef(0)
   const runId = useRef(0)
 
-  const methods = compare ? ['ae', 'vae'].filter((m) => marks[m]) : [target]
+  const methods = compare ? ['ae', 'vae', 'gan'].filter((m) => marks[m]) : [target]
   const active = useMemo(() => activeAttacks(attacks), [attacks])
   const summary = useMemo(() => attackSummary(attacks).join('  ·  '), [attacks])
 
@@ -204,8 +204,8 @@ export default function Attack({ go }) {
     try {
       const blob = await (await fetch('/samples/sample-portrait.jpg')).blob()
       const f = new File([blob], 'sample-portrait.jpg', { type: 'image/jpeg' })
-      const marked = await Promise.all(['ae', 'vae'].map((m) => watermarkImage(f, m)))
-      ;['ae', 'vae'].forEach((m, i) => {
+      const marked = await Promise.all(['ae', 'vae', 'gan'].map((m) => watermarkImage(f, m)))
+      ;['ae', 'vae', 'gan'].forEach((m, i) => {
         const data = marked[i]
         setMark(m, {
           url: data.watermarkedImageUrl,
@@ -239,7 +239,7 @@ export default function Attack({ go }) {
   }
 
   const cleanUrl = (m) => marks[m]?.url
-  const origUrl = source?.url || marks.ae?.url || marks.vae?.url
+  const origUrl = source?.url || marks.ae?.url || marks.vae?.url || marks.gan?.url
 
   return (
     <div className="space-y-7">
@@ -247,7 +247,7 @@ export default function Attack({ go }) {
       <div className="flex flex-wrap items-center gap-3">
         {!compare && (
           <div className="seg inline-flex p-1 rounded-lg bg-graphite border border-[var(--line)]">
-            {['ae', 'vae'].map((m) => (
+            {['ae', 'vae', 'gan'].map((m) => (
               <button
                 key={m}
                 disabled={!marks[m]}
@@ -267,11 +267,11 @@ export default function Attack({ go }) {
         <button
           className="chip"
           data-on={compare}
-          disabled={!(marks.ae && marks.vae)}
+          disabled={['ae', 'vae', 'gan'].filter((m) => marks[m]).length < 2}
           onClick={() => setCompare((c) => !c)}
-          title={!(marks.ae && marks.vae) ? 'Embed both AE and VAE first' : ''}
+          title={['ae', 'vae', 'gan'].filter((m) => marks[m]).length < 2 ? 'Embed at least two models first' : ''}
         >
-          <span className="dot" />Compare AE vs VAE
+          <span className="dot" />Compare Models
         </button>
         {active.length > 0 && (
           <button className="chip" onClick={resetAll}><span className="dot" />Clear {active.length} attack{active.length > 1 ? 's' : ''}</button>
@@ -328,7 +328,7 @@ export default function Attack({ go }) {
             const v = res ? verdictFromSignal(sig) : null
             return (
               <div key={m} className={`text-center shrink-0 ${stale && res ? 'opacity-50' : ''}`}>
-                {compare && <p className="tag mb-1" style={{ color: m === 'ae' ? 'var(--trace)' : 'var(--signal)' }}>{m.toUpperCase()}</p>}
+                {compare && <p className="tag mb-1" style={{ color: m === 'ae' ? 'var(--trace)' : m === 'vae' ? 'var(--signal)' : '#F43F5E' }}>{m.toUpperCase()}</p>}
                 <SignalMeter
                   variant="dial"
                   size={compare ? 148 : 176}

@@ -142,7 +142,7 @@ export default function Embed({ go }) {
         <div>
           <p className="tag mb-2">Embedding model</p>
           <div className="seg inline-flex p-1 rounded-lg bg-graphite border border-[var(--line)]">
-            {['ae', 'vae'].map((m) => (
+            {['ae', 'vae', 'gan'].map((m) => (
               <button
                 key={m}
                 onClick={() => setMethod(m)}
@@ -153,7 +153,7 @@ export default function Embed({ go }) {
                   color: method === m ? 'var(--graphite)' : 'var(--mute)'
                 }}
               >
-                {m === 'ae' ? 'Autoencoder' : 'Variational'}
+                {m === 'ae' ? 'Autoencoder' : m === 'vae' ? 'Variational' : 'GAN (Adversarial)'}
               </button>
             ))}
           </div>

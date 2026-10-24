@@ -16,7 +16,7 @@ export function WorkspaceProvider({ children }) {
   // the image the user brought in
   const [source, setSource] = useState(null) // { file, url, name }
   // watermarking results, keyed by method
-  const [marks, setMarks] = useState({ ae: null, vae: null }) // { url, file, psnr, ssim, bits }
+  const [marks, setMarks] = useState({ ae: null, vae: null, gan: null }) // { url, file, psnr, ssim, bits }
   // last Examine run
   const [examine, setExamine] = useState(null) // { url, name, prediction, confidence, verdict }
   // Attack Simulation timeline — persists across sections
@@ -27,7 +27,7 @@ export function WorkspaceProvider({ children }) {
       if (prev?.url) URL.revokeObjectURL(prev.url)
       return { file, url: URL.createObjectURL(file), name: file.name }
     })
-    setMarks({ ae: null, vae: null })
+    setMarks({ ae: null, vae: null, gan: null })
   }, [])
 
   const setMark = useCallback((method, data) => {
@@ -45,7 +45,7 @@ export function WorkspaceProvider({ children }) {
       if (prev?.url) URL.revokeObjectURL(prev.url)
       return null
     })
-    setMarks({ ae: null, vae: null })
+    setMarks({ ae: null, vae: null, gan: null })
     setExamine(null)
   }, [])
 

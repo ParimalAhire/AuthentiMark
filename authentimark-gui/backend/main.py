@@ -72,7 +72,7 @@ def health():
 async def watermark(file: UploadFile = File(...), method: str = Form(...)):
     if not MODELS_LOADED:
         raise HTTPException(status_code=503, detail="Models not loaded. " + ERROR_MSG)
-    if method not in ("ae", "vae"):
+    if method not in ("ae", "vae", "gan"):
         raise HTTPException(status_code=400, detail="Invalid watermarking method.")
         
     try:
@@ -210,5 +210,21 @@ async def simulate_attack_chain(
         for step in steps:
             image = apply_attack(image, step["type"], step["intensity"])
         return {"attackedImageUrl": encode_png_data_url(image)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/decode")
+async def decode(file: UploadFile = File(...), method: str = Form(...)):
+    if method not in ("ae", "vae", "gan"):
+        raise HTTPException(status_code=400, detail="Invalid method. Supported: ae, vae, gan")
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file.")
+    try:
+        decoded_bits = decode_message(image, method)
+        return {"bits": decoded_bits}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -19,6 +19,7 @@ export default function Examine({ go }) {
     const list = []
     if (marks.ae) list.push({ key: 'ae', label: 'Your AE-watermarked image', file: marks.ae.file, url: marks.ae.url })
     if (marks.vae) list.push({ key: 'vae', label: 'Your VAE-watermarked image', file: marks.vae.file, url: marks.vae.url })
+    if (marks.gan) list.push({ key: 'gan', label: 'Your GAN-watermarked image', file: marks.gan.file, url: marks.gan.url })
     if (source) list.push({ key: 'src', label: 'Your original (unwatermarked)', file: source.file, url: source.url })
     return list
   }, [marks, source])
@@ -140,7 +141,7 @@ export default function Examine({ go }) {
 
             <div className="flex flex-col gap-2 mt-6 w-full">
               <button className="btn btn-ghost w-full" onClick={() => { setFile(null); setExamine(null) }}>Examine another</button>
-              {(marks.ae || marks.vae) && (
+              {(marks.ae || marks.vae || marks.gan) && (
                 <button className="btn btn-trace w-full text-center" onClick={() => go('attack')}>
                   See it degrade under attack →
                 </button>

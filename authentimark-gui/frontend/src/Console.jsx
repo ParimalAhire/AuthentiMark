@@ -4,6 +4,7 @@ import { checkHealth } from './api'
 import Embed from './sections/Embed'
 import Examine from './sections/Examine'
 import Attack from './sections/Attack'
+import Compare from './sections/Compare'
 import ModelsDetails from './sections/ModelsDetails'
 
 const Icon = ({ d, className = 'w-4 h-4' }) => (
@@ -26,6 +27,10 @@ const SECTIONS = [
     icon: <Icon d={<><path d="M14.5 3.5 3.5 14.5 M9.5 3.5l11 11" /><path d="M12 8 8 12l4 4 4-4Z" /></>} />
   },
   {
+    id: 'compare', label: 'Compare', blurb: 'Head-to-head comparison between Autoencoder, VAE, and GAN',
+    icon: <Icon d={<><path d="M16 3h5v5" /><path d="M4 20L21 3" /><path d="M21 16v5h-5" /><path d="M15 15l6 6" /><path d="M4 4l5 5" /></>} />
+  },
+  {
     id: 'models', label: 'Model Details', blurb: 'View performance specifications, training curves, and analysis metrics',
     icon: <Icon d={<><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /></>} />
   }
@@ -36,7 +41,8 @@ function SpecimenStrip() {
   const items = [
     source && { k: 'src', tag: 'SRC', url: source.url, dot: null },
     marks.ae && { k: 'ae', tag: 'AE', url: marks.ae.url, dot: 'var(--trace)' },
-    marks.vae && { k: 'vae', tag: 'VAE', url: marks.vae.url, dot: 'var(--signal)' }
+    marks.vae && { k: 'vae', tag: 'VAE', url: marks.vae.url, dot: 'var(--signal)' },
+    marks.gan && { k: 'gan', tag: 'GAN', url: marks.gan.url, dot: '#F43F5E' }
   ].filter(Boolean)
 
   if (items.length === 0) {
@@ -116,7 +122,7 @@ export default function Console({ section, setSection }) {
       <main className="flex-1 min-w-0 flex flex-col min-h-screen">
         <div className="flex-1 p-5 sm:p-8 lg:p-12 max-w-[1000px] w-full mx-auto">
           <header className="mb-8">
-            <p className="tag mb-2">Console · {String(SECTIONS.findIndex((s) => s.id === section) + 1).padStart(2, '0')} / 04</p>
+            <p className="tag mb-2">Console · {String(SECTIONS.findIndex((s) => s.id === section) + 1).padStart(2, '0')} / {String(SECTIONS.length).padStart(2, '0')}</p>
             <h1 className="display-xl text-[clamp(2.2rem,5vw,3.4rem)]">{meta.label}</h1>
             <p className="text-mute text-[14px] mt-2">{meta.blurb}</p>
           </header>
@@ -124,6 +130,7 @@ export default function Console({ section, setSection }) {
           {section === 'embed' && <Embed go={setSection} />}
           {section === 'examine' && <Examine go={setSection} />}
           {section === 'attack' && <Attack go={setSection} />}
+          {section === 'compare' && <Compare go={setSection} />}
           {section === 'models' && <ModelsDetails />}
         </div>
 
@@ -137,6 +144,7 @@ export default function Console({ section, setSection }) {
           </span>
           <span>AE {marks.ae ? '✓' : '—'}</span>
           <span>VAE {marks.vae ? '✓' : '—'}</span>
+          <span style={{ color: marks.gan ? '#F43F5E' : 'inherit' }}>GAN {marks.gan ? '✓' : '—'}</span>
           <span>{timeline.length} detection{timeline.length === 1 ? '' : 's'} logged</span>
           <span className="ml-auto">inference only · no data leaves this machine</span>
         </footer>

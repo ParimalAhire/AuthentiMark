@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { WorkspaceProvider } from './lib/workspace'
 import Console from './Console'
 
-const SECTION_IDS = ['embed', 'examine', 'attack', 'models']
+const SECTION_IDS = ['embed', 'examine', 'attack', 'compare', 'models']
 
 function readHash() {
   const h = window.location.hash.replace(/^#\/?/, '')

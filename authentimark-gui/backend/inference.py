@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 from PIL import Image, ImageFilter, ImageEnhance
-from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, WatermarkDetector, prepare_for_vit
+from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, WatermarkDetector, prepare_for_vit
 
 # Use both vCPUs for inference. The EC2 host has 2 cores; a swapfile covers
 # the model-load spike, so pinning to 1 thread only slowed embed/detect with
@@ -17,6 +17,7 @@ MODELS_DIR = os.path.join(BASE_DIR, "models")
 # Global model cache (lazy-loaded on demand to keep startup RAM < 50MB)
 _AE_ENCODER, _AE_DECODER = None, None
 _VAE_ENCODER, _VAE_DECODER = None, None
+_GAN_ENCODER, _GAN_DECODER = None, None
 _DETECTOR = None
 
 def get_ae():
@@ -50,13 +51,64 @@ def get_vae():
         decoder.eval()
         _VAE_ENCODER, _VAE_DECODER = encoder, decoder
     return _VAE_ENCODER, _VAE_DECODER
+def get_gan():
+    global _GAN_ENCODER, _GAN_DECODER
+    if _GAN_ENCODER is None or _GAN_DECODER is None:
+        gan_path = os.path.join(MODELS_DIR, "gan_app1.pt")
+        if not os.path.exists(gan_path):
+            gan_path = os.path.join(MODELS_DIR, "gan_app.pt")
+        if not os.path.exists(gan_path):
+            raise FileNotFoundError(f"GAN model checkpoint not found at {gan_path}")
+        encoder = GANEncoder(residual_scale=0.3)
+        decoder = GANDecoder()
+        checkpoint = torch.load(gan_path, map_location="cpu")
+        encoder.load_state_dict(checkpoint["encoder"])
+        decoder.load_state_dict(checkpoint["decoder"])
+        encoder.eval()
+        decoder.eval()
+        _GAN_ENCODER, _GAN_DECODER = encoder, decoder
+    return _GAN_ENCODER, _GAN_DECODER
+
 
 def get_detector():
     global _DETECTOR
     if _DETECTOR is None:
+        v2_path = os.path.join(MODELS_DIR, "detector_gan_finetuned_v2.pt")
+        if not os.path.exists(v2_path):
+            v2_path = os.path.join(MODELS_DIR, "detector_gan_fintuned_v2.pt")
+        finetuned_path = os.path.join(MODELS_DIR, "detector_gan_finetuned.pt")
         orig_path = os.path.join(MODELS_DIR, "detector_latest.pt")
         
-        # Load original full-precision model (detector_latest.pt)
+        # Priority 1: GAN-finetuned V2 detector (local uncompressed 346MB checkpoint)
+        if os.path.exists(v2_path):
+            detector = WatermarkDetector()
+            checkpoint = torch.load(v2_path, map_location="cpu")
+            detector.load_state_dict(checkpoint["model"])
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Priority 2: GAN-finetuned V2 quantized detector (85MB lightweight checkpoint for git/cloud)
+        quant_v2_path = os.path.join(MODELS_DIR, "detector_gan_v2_quantized.pt")
+        if os.path.exists(quant_v2_path):
+            base_model = WatermarkDetector()
+            detector = torch.quantization.quantize_dynamic(base_model, {torch.nn.Linear}, dtype=torch.qint8)
+            checkpoint = torch.load(quant_v2_path, map_location="cpu")
+            detector.load_state_dict(checkpoint["model"])
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Priority 3: GAN-finetuned V1 detector
+        if os.path.exists(finetuned_path):
+            detector = WatermarkDetector()
+            checkpoint = torch.load(finetuned_path, map_location="cpu")
+            detector.load_state_dict(checkpoint["model"])
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Fallback: Original detector
         if os.path.exists(orig_path):
             detector = WatermarkDetector()
             checkpoint = torch.load(orig_path, map_location="cpu")
@@ -88,8 +140,15 @@ def get_detector():
 def check_models_ready():
     ae_ok = os.path.exists(os.path.join(MODELS_DIR, "ae_latest.pt"))
     vae_ok = os.path.exists(os.path.join(MODELS_DIR, "vae_latest.pt"))
-    det_ok = os.path.exists(os.path.join(MODELS_DIR, "detector_latest.pt"))
-    return ae_ok and vae_ok and det_ok
+    gan_ok = os.path.exists(os.path.join(MODELS_DIR, "gan_app1.pt")) or os.path.exists(os.path.join(MODELS_DIR, "gan_app.pt"))
+    det_ok = (
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_finetuned_v2.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_fintuned_v2.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_v2_quantized.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_finetuned.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_latest.pt"))
+    )
+    return ae_ok and vae_ok and gan_ok and det_ok
 
 # For backward compatibility
 MODELS_LOADED = check_models_ready()
@@ -100,6 +159,8 @@ def watermark_image(image, method):
         encoder, _ = get_ae()
     elif method == "vae":
         encoder, _ = get_vae()
+    elif method == "gan":
+        encoder, _ = get_gan()
     else:
         raise ValueError(f"Unknown watermarking method: {method}")
         
@@ -198,6 +259,8 @@ def decode_message(image, method):
         _, decoder = get_ae()
     elif method == "vae":
         _, decoder = get_vae()
+    elif method == "gan":
+        _, decoder = get_gan()
     else:
         raise ValueError(f"Unknown method {method}")
         
