@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 from PIL import Image, ImageFilter, ImageEnhance
-from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, WatermarkDetector, prepare_for_vit
+from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, LatentResidualEncoder, WatermarkDetector, prepare_for_vit
 
 # Use both vCPUs for inference. The EC2 host has 2 cores; a swapfile covers
 # the model-load spike, so pinning to 1 thread only slowed embed/detect with
@@ -18,6 +18,7 @@ MODELS_DIR = os.path.join(BASE_DIR, "models")
 _AE_ENCODER, _AE_DECODER = None, None
 _VAE_ENCODER, _VAE_DECODER = None, None
 _GAN_ENCODER, _GAN_DECODER = None, None
+_LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER = None, None
 _DETECTOR = None
 
 def get_ae():
@@ -68,6 +69,25 @@ def get_gan():
         decoder.eval()
         _GAN_ENCODER, _GAN_DECODER = encoder, decoder
     return _GAN_ENCODER, _GAN_DECODER
+
+
+def get_latent_residual():
+    global _LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER
+    if _LATENT_RESIDUAL_ENCODER is None or _LATENT_RESIDUAL_DECODER is None:
+        lr_path = os.path.join(MODELS_DIR, "latent_residual_app.pt")
+        if not os.path.exists(lr_path):
+            raise FileNotFoundError(f"Latent-Residual model checkpoint not found at {lr_path}")
+        checkpoint = torch.load(lr_path, map_location="cpu")
+        res_scale = checkpoint.get("config", {}).get("residual_scale", 0.1)
+        encoder = LatentResidualEncoder(residual_scale=res_scale)
+        decoder = AEDecoder()
+        encoder.load_state_dict(checkpoint["encoder"])
+        decoder.load_state_dict(checkpoint["decoder"])
+        encoder.eval()
+        decoder.eval()
+        _LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER = encoder, decoder
+    return _LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER
+
 
 
 def get_detector():
@@ -148,6 +168,7 @@ def check_models_ready():
         os.path.exists(os.path.join(MODELS_DIR, "detector_gan_finetuned.pt")) or
         os.path.exists(os.path.join(MODELS_DIR, "detector_latest.pt"))
     )
+    lr_ok = os.path.exists(os.path.join(MODELS_DIR, "latent_residual_app.pt"))
     return ae_ok and vae_ok and gan_ok and det_ok
 
 # For backward compatibility
@@ -161,6 +182,8 @@ def watermark_image(image, method):
         encoder, _ = get_vae()
     elif method == "gan":
         encoder, _ = get_gan()
+    elif method in ("latent_residual", "diffusion"):
+        encoder, _ = get_latent_residual()
     else:
         raise ValueError(f"Unknown watermarking method: {method}")
         
@@ -261,6 +284,8 @@ def decode_message(image, method):
         _, decoder = get_vae()
     elif method == "gan":
         _, decoder = get_gan()
+    elif method in ("latent_residual", "diffusion"):
+        _, decoder = get_latent_residual()
     else:
         raise ValueError(f"Unknown method {method}")
         

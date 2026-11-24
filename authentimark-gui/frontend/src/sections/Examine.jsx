@@ -20,6 +20,7 @@ export default function Examine({ go }) {
     if (marks.ae) list.push({ key: 'ae', label: 'Your AE-watermarked image', file: marks.ae.file, url: marks.ae.url })
     if (marks.vae) list.push({ key: 'vae', label: 'Your VAE-watermarked image', file: marks.vae.file, url: marks.vae.url })
     if (marks.gan) list.push({ key: 'gan', label: 'Your GAN-watermarked image', file: marks.gan.file, url: marks.gan.url })
+    if (marks.latent_residual) list.push({ key: 'latent_residual', label: 'Your LR (Diffusion) image', file: marks.latent_residual.file, url: marks.latent_residual.url })
     if (source) list.push({ key: 'src', label: 'Your original (unwatermarked)', file: source.file, url: source.url })
     return list
   }, [marks, source])

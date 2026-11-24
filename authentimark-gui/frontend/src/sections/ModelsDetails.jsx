@@ -11,6 +11,7 @@ export default function ModelsDetails() {
           { id: 'ae', name: 'Autoencoder (AE)' },
           { id: 'vae', name: 'Variational AE (VAE)' },
           { id: 'gan', name: 'GAN (Adversarial)' },
+          { id: 'latent_residual', name: 'LR (Diffusion)' },
           { id: 'detector', name: 'ViT Detector' },
           { id: 'comparison', name: 'Comparison & Metrics' }
         ].map((tab) => (
@@ -379,121 +380,229 @@ export default function ModelsDetails() {
         </div>
       )}
 
+      {/* SUB-TAB: Latent-Residual (Diffusion) */}
+      {subTab === 'latent_residual' && (
+        <div className="grid lg:grid-cols-[380px_1fr] gap-8 items-start">
+          {/* Specifications */}
+          <div className="panel p-6 space-y-6">
+            <div>
+              <div className="inline-block px-2.5 py-1 rounded bg-[#8B5CF618] text-[#8B5CF6] text-[10px] font-mono uppercase font-bold tracking-wider mb-2">
+                TAESD Latent-Space Diffusion
+              </div>
+              <h2 className="text-[20px] font-bold tracking-wide" style={{ fontFamily: 'var(--font-display)' }}>
+                Latent-Residual Model
+              </h2>
+            </div>
+            <p className="text-[13.5px] text-mute leading-relaxed">
+              The <b>Latent-Residual</b> architecture operates inside the compressed 4-channel latent space of a pre-trained, frozen 
+              Tiny AutoEncoder for Stable Diffusion (TAESD). A 3-layer convolutional network computes a latent shift 
+              <code className="font-mono text-[11px] ml-1">&Delta;z = 2.0 &middot; tanh(f([z, m]) + m_proj)</code>, 
+              which is decoded into an image residual and bounded by a pixel perturbation cap (<code className="font-mono text-[11px]">scale = 0.1</code>).
+            </p>
+
+            <div className="border-t border-[var(--line)] pt-4 space-y-4">
+              <div>
+                <span className="tag text-[9px]">Empirical Test Results (9,771 Images)</span>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="panel-inset p-3">
+                    <span className="tag text-[8px]">Bit Accuracy (Clean)</span>
+                    <div className="text-[18px] font-bold readout mt-1 text-[var(--signal)]">99.96%</div>
+                    <span className="text-[8px] text-mute">Exact match: 98.96%</span>
+                  </div>
+                  <div className="panel-inset p-3">
+                    <span className="tag text-[8px]">Attack Robustness</span>
+                    <div className="text-[18px] font-bold readout mt-1 text-[#8B5CF6]">0.9968</div>
+                    <span className="text-[8px] text-[var(--signal)]">Top-tier resilience</span>
+                  </div>
+                  <div className="panel-inset p-3">
+                    <span className="tag text-[8px]">JPEG Q90 Accuracy</span>
+                    <div className="text-[18px] font-bold readout mt-1 text-[var(--signal)]">99.94%</div>
+                    <span className="text-[8px] text-mute">JPEG Q30: 99.56%</span>
+                  </div>
+                  <div className="panel-inset p-3">
+                    <span className="tag text-[8px]">Crop 0.8 &amp; Blur</span>
+                    <div className="text-[18px] font-bold readout mt-1 text-[var(--filament)]">99.32% / 99.89%</div>
+                    <span className="text-[8px] text-mute">Crop 80% &amp; Gaussian Blur</span>
+                  </div>
+                  <div className="panel-inset p-3">
+                    <span className="tag text-[8px]">PSNR (Fidelity)</span>
+                    <div className="text-[18px] font-bold readout mt-1 text-[var(--filament)]">21.00 dB</div>
+                    <span className="text-[8px] text-mute">SSIM: 0.6443</span>
+                  </div>
+                  <div className="panel-inset p-3">
+                    <span className="tag text-[8px]">Final Overall Score</span>
+                    <div className="text-[18px] font-bold readout mt-1 text-[#8B5CF6]">0.8945</div>
+                    <span className="text-[8px] text-mute">Quality: 0.7922</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <span className="tag text-[9px]">Research Paper Analysis &amp; Trade-Offs</span>
+                <p className="text-[12px] text-mute mt-1 leading-relaxed">
+                  Embedding watermarks inside the TAESD latent space guarantees high survivability under real-world distortions like JPEG compression and cropping, because latent features represent high-level semantic image components. 
+                  However, because the TAESD encoder and decoder compress images by an 8&times; spatial factor (16&times;16 latent representation for 128&times;128 images), decoding introduces block-level reconstruction artifacts that limit PSNR to 21.00 dB (&Delta;E 12.05) compared to direct pixel-residual architectures.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Visuals */}
+          <div className="space-y-6">
+            <div className="panel p-5">
+              <span className="tag mb-2">Training Performance &amp; Attack Curves</span>
+              <figure className="border border-[var(--line)] rounded-lg overflow-hidden bg-white p-2">
+                <img src="/assets/diffusion_assests/all_curves_output.png" alt="Latent-Residual All Curves" className="w-full h-auto object-contain max-h-[480px] mx-auto" />
+              </figure>
+              <p className="text-[11px] text-mute mt-2">
+                Training dynamics for Latent-Residual: image loss (MSE), message loss (BCE), learning rate / scale schedule, and bit recovery rates under clean, JPEG Q90, JPEG Q30, Crop 0.8, and Blur attacks across epochs.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {subTab === 'comparison' && (
         <div className="space-y-8">
-          {/* Main 3-Way Graph */}
+          {/* Training Architecture */}
           <div className="panel p-6">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <span className="tag">Empirical Benchmark Graphs</span>
+                <span className="tag">Unified Framework</span>
                 <h3 className="text-[17px] font-bold mt-1" style={{ fontFamily: 'var(--font-display)' }}>
-                  Tri-Model Performance Comparison: GAN vs AE vs VAE
+                  Training Architecture Shared by All Five Models
                 </h3>
               </div>
-              <span className="text-[11px] font-mono text-mute">60 Epochs Evaluated</span>
+              <span className="text-[11px] font-mono text-mute">Research Benchmark</span>
             </div>
             <figure className="border border-[var(--line)] rounded-lg overflow-hidden bg-white p-3">
-              <img src="/assets/gan_assets/scores_comparison_graphs.png" alt="AE vs VAE vs GAN Comparison Graphs" className="w-full h-auto object-contain max-h-[460px] mx-auto" />
+              <img src="/assets/final_comparison/Training architecture shared by all five models.png" alt="Shared Training Architecture" className="w-full h-auto object-contain max-h-[420px] mx-auto" />
             </figure>
             <p className="text-[11.5px] text-mute mt-2">
-              Side-by-side metric distributions illustrating GAN superiority in image fidelity (PSNR/SSIM) and JPEG attack survival.
+              End-to-end differentiable watermarking pipeline incorporating Encoder (Generator), simulated attack channel (JPEG, Crop, Blur, Noise), and recovery Decoder.
             </p>
           </div>
 
-          {/* Existing metric distributions */}
+          {/* Benchmark Comparison Figures: Quality, Robustness, Final Score + Bit Accuracy */}
           <div className="grid md:grid-cols-2 gap-6">
             <div className="panel p-5">
-              <span className="tag mb-2">Peak Signal-to-Noise Ratio (PSNR)</span>
+              <span className="tag mb-2">Quality, Robustness &amp; Final Score</span>
               <figure className="border border-[var(--line)] rounded-lg overflow-hidden bg-white p-2">
-                <img src="/assets/PSNR.png" alt="PSNR Comparison" className="w-full h-auto object-contain max-h-[280px]" />
+                <img src="/assets/final_comparison/Quality, robustness and final score per model.png" alt="Quality, Robustness and Final Score" className="w-full h-auto object-contain max-h-[290px] mx-auto" />
               </figure>
-              <p className="text-[11px] text-mute mt-2">PSNR distribution comparison between deterministic and regularized models.</p>
+              <p className="text-[11px] text-mute mt-2">Comparative trade-offs between perceptual image quality, distortion robustness, and final weighted benchmark scores.</p>
             </div>
 
             <div className="panel p-5">
-              <span className="tag mb-2">Structural Similarity (SSIM)</span>
+              <span className="tag mb-2">Bit Accuracy Under Real Attacks</span>
               <figure className="border border-[var(--line)] rounded-lg overflow-hidden bg-white p-2">
-                <img src="/assets/SSIM.png" alt="SSIM Comparison" className="w-full h-auto object-contain max-h-[280px]" />
+                <img src="/assets/final_comparison/Bit accuracy on the test split, real attacks.png" alt="Bit Accuracy on Real Attacks" className="w-full h-auto object-contain max-h-[290px] mx-auto" />
               </figure>
-              <p className="text-[11px] text-mute mt-2">Structural similarity score distributions.</p>
+              <p className="text-[11px] text-mute mt-2">Bit recovery accuracy across clean, JPEG Q90, JPEG Q30, Crop 0.8, and Gaussian Blur attack evaluations.</p>
             </div>
           </div>
 
-          {/* Complete 3-Model Table */}
+          {/* PSNR, SSIM & Colour Difference Figure */}
+          <div className="panel p-5">
+            <span className="tag mb-2">Fidelity &amp; Perceptual Quality Distribution</span>
+            <figure className="border border-[var(--line)] rounded-lg overflow-hidden bg-white p-2">
+              <img src="/assets/final_comparison/PSNR, SSIM and colour difference.png" alt="PSNR, SSIM and Colour Difference" className="w-full h-auto object-contain max-h-[320px] mx-auto" />
+            </figure>
+            <p className="text-[11px] text-mute mt-2">Evaluation of Peak Signal-to-Noise Ratio (PSNR), Structural Similarity Index (SSIM), and CIEDE2000 colour difference (&Delta;E).</p>
+          </div>
+
+          {/* Complete 5-Model Benchmark Table */}
           <div className="panel p-6">
-            <h3 className="text-[16px] font-bold uppercase mb-4" style={{ fontFamily: 'var(--font-display)' }}>
-              Head-to-Head Technical Summary (AE vs VAE vs GAN)
-            </h3>
+            <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
+              <h3 className="text-[16px] font-bold uppercase" style={{ fontFamily: 'var(--font-display)' }}>
+                Table IV: Main Results on the 9,771-Image Test Split (Real Attacks)
+              </h3>
+              <span className="text-[11px] font-mono text-mute">AuthentiMark Research Evaluation</span>
+            </div>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-[13px]">
+              <table className="w-full border-collapse text-left text-[12.5px]">
                 <thead>
                   <tr className="border-b border-[var(--line-2)] text-mute uppercase font-mono text-[9px] tracking-wider">
-                    <th className="py-3 px-3">Metric</th>
-                    <th className="py-3 px-3 text-[#5B8DEF]">Autoencoder (AE)</th>
-                    <th className="py-3 px-3 text-[#4ADE80]">Variational (VAE)</th>
-                    <th className="py-3 px-3 text-[#F43F5E]">GAN (Adversarial)</th>
-                    <th className="py-3 px-3">Architectural Takeaway</th>
+                    <th className="py-3 px-2.5">Model</th>
+                    <th className="py-3 px-2.5">Bit Acc.</th>
+                    <th className="py-3 px-2.5">Exact Match</th>
+                    <th className="py-3 px-2.5">PSNR (dB)</th>
+                    <th className="py-3 px-2.5">SSIM</th>
+                    <th className="py-3 px-2.5">&Delta;E (CIEDE2000)</th>
+                    <th className="py-3 px-2.5">Quality</th>
+                    <th className="py-3 px-2.5">Robustness</th>
+                    <th className="py-3 px-2.5 font-bold">Final Score</th>
+                    <th className="py-3 px-2.5">Train (min)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--line)] text-mute font-mono text-[12px]">
+                <tbody className="divide-y divide-[var(--line)] text-mute font-mono text-[11.5px]">
                   <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">PSNR (Fidelity)</td>
-                    <td className="py-3 px-3 text-[#5B8DEF]">31.13 dB</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">28.41 dB</td>
-                    <td className="py-3 px-3 text-[#F43F5E] font-bold">35.91 dB</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">GAN delivers +4.8 dB higher fidelity over AE with near-invisible noise.</td>
+                    <td className="py-3 px-2.5 font-sans font-semibold text-[#5B8DEF]">Autoencoder (AE)</td>
+                    <td className="py-3 px-2.5">0.9996</td>
+                    <td className="py-3 px-2.5">0.9919</td>
+                    <td className="py-3 px-2.5">23.17</td>
+                    <td className="py-3 px-2.5">0.5766</td>
+                    <td className="py-3 px-2.5">13.40</td>
+                    <td className="py-3 px-2.5">0.7888</td>
+                    <td className="py-3 px-2.5">0.9978</td>
+                    <td className="py-3 px-2.5 text-[var(--filament)] font-bold">0.8933</td>
+                    <td className="py-3 px-2.5">49</td>
+                  </tr>
+                  <tr style={{ background: 'rgba(139, 92, 246, 0.05)' }}>
+                    <td className="py-3 px-2.5 font-sans font-semibold text-[#8B5CF6]">LR (Diffusion)</td>
+                    <td className="py-3 px-2.5">0.9996</td>
+                    <td className="py-3 px-2.5">0.9896</td>
+                    <td className="py-3 px-2.5">21.00</td>
+                    <td className="py-3 px-2.5">0.6443</td>
+                    <td className="py-3 px-2.5">12.05</td>
+                    <td className="py-3 px-2.5">0.7922</td>
+                    <td className="py-3 px-2.5">0.9968</td>
+                    <td className="py-3 px-2.5 text-[#8B5CF6] font-bold">0.8945</td>
+                    <td className="py-3 px-2.5">167</td>
                   </tr>
                   <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">SSIM (Structure)</td>
-                    <td className="py-3 px-3 text-[#5B8DEF]">0.8518</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">0.8079</td>
-                    <td className="py-3 px-3 text-[#F43F5E] font-bold">0.9831</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">GAN achieves near-perfect structural preservation (&gt; 0.98).</td>
+                    <td className="py-3 px-2.5 font-sans font-semibold text-[#4ADE80]">Variational (VAE)</td>
+                    <td className="py-3 px-2.5 font-bold text-[var(--signal)]">1.0000</td>
+                    <td className="py-3 px-2.5 font-bold text-[var(--signal)]">1.0000</td>
+                    <td className="py-3 px-2.5">24.88</td>
+                    <td className="py-3 px-2.5">0.6674</td>
+                    <td className="py-3 px-2.5">11.20</td>
+                    <td className="py-3 px-2.5">0.8223</td>
+                    <td className="py-3 px-2.5 font-bold text-[var(--signal)]">0.9999</td>
+                    <td className="py-3 px-2.5 text-[var(--filament)] font-bold">0.9111</td>
+                    <td className="py-3 px-2.5">108</td>
                   </tr>
                   <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">Bit Accuracy (Clean)</td>
-                    <td className="py-3 px-3 text-[#5B8DEF] font-bold">99.97%</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">98.87%</td>
-                    <td className="py-3 px-3 text-[#F43F5E]">99.81%</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">AE and GAN both reliably recover &gt; 99.8% of embedded payload bits.</td>
+                    <td className="py-3 px-2.5 font-sans font-semibold text-[#F59E0B]">GAN-Rebuild</td>
+                    <td className="py-3 px-2.5">0.9993</td>
+                    <td className="py-3 px-2.5">0.9830</td>
+                    <td className="py-3 px-2.5">25.64</td>
+                    <td className="py-3 px-2.5">0.8529</td>
+                    <td className="py-3 px-2.5">9.25</td>
+                    <td className="py-3 px-2.5">0.8732</td>
+                    <td className="py-3 px-2.5">0.9925</td>
+                    <td className="py-3 px-2.5 text-[var(--filament)] font-bold">0.9328</td>
+                    <td className="py-3 px-2.5">110</td>
                   </tr>
                   <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">Bit Error Rate (BER)</td>
-                    <td className="py-3 px-3 text-[#5B8DEF]">0.0003</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">0.0113</td>
-                    <td className="py-3 px-3 text-[#F43F5E]">0.0019</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">Extremely low error rates across uncompressed transmissions.</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">Residual Mean Abs (0-255)</td>
-                    <td className="py-3 px-3 text-[#5B8DEF]">5.24</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">6.42</td>
-                    <td className="py-3 px-3 text-[#F43F5E] font-bold">1.81</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">GAN watermark residual perturbation is ~3x smaller than AE.</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">JPEG Q90 Recovery</td>
-                    <td className="py-3 px-3 text-[#5B8DEF]">50.17%</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">52.00%</td>
-                    <td className="py-3 px-3 text-[#F43F5E] font-bold">95.00%</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">GAN watermark is engineered to survive lossy DCT compression.</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">Overall Quality Score</td>
-                    <td className="py-3 px-3 text-[#5B8DEF]">0.9073</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">0.8739</td>
-                    <td className="py-3 px-3 text-[#F43F5E] font-bold">0.9693</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">Weighted quality score incorporating PSNR, SSIM, and residual L-infinity.</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-3 font-sans font-semibold text-[var(--filament)]">Final Benchmark Score</td>
-                    <td className="py-3 px-3 text-[#5B8DEF]">0.7044</td>
-                    <td className="py-3 px-3 text-[#4ADE80]">0.6897</td>
-                    <td className="py-3 px-3 text-[#F43F5E] font-bold">0.7925</td>
-                    <td className="py-3 px-3 font-sans text-[11px]">GAN is the highest-performing watermarking architecture overall.</td>
+                    <td className="py-3 px-2.5 font-sans font-semibold text-[#F43F5E]">GAN-Residual</td>
+                    <td className="py-3 px-2.5">0.9997</td>
+                    <td className="py-3 px-2.5">0.9937</td>
+                    <td className="py-3 px-2.5 font-bold text-[var(--signal)]">29.78</td>
+                    <td className="py-3 px-2.5 font-bold text-[var(--signal)]">0.8949</td>
+                    <td className="py-3 px-2.5 font-bold text-[var(--signal)]">3.28</td>
+                    <td className="py-3 px-2.5 font-bold text-[var(--signal)]">0.9097</td>
+                    <td className="py-3 px-2.5">0.9961</td>
+                    <td className="py-3 px-2.5 text-[#F43F5E] font-bold">0.9529</td>
+                    <td className="py-3 px-2.5">92</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div className="mt-4 text-[11.5px] text-mute space-y-1">
+              <p>&bull; <b>GAN-Residual</b> achieved the highest overall score (0.9529) and lowest colour difference (&Delta;E 3.28) with PSNR of 29.78 dB.</p>
+              <p>&bull; <b>VAE</b> achieved perfect clean bit accuracy (1.0000) and highest robustness (0.9999).</p>
+              <p>&bull; <b>Latent-Residual</b> balances diffusion latent stability (0.9968 robustness) while being subject to TAESD 8&times; block compression limits (21.00 dB PSNR).</p>
             </div>
           </div>
         </div>

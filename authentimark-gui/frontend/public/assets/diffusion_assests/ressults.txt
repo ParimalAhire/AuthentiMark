@@ -1,0 +1,13 @@
+LATENT_RESIDUAL | test images: 9771
+bit acc clean                     0.9996
+bit acc JPEG q90                  0.9994
+bit acc JPEG q30                  0.9956
+bit acc crop 0.8                  0.9932
+bit acc blur                      0.9989
+exact match (clean)               0.9896
+PSNR (dB)                        21.0023
+SSIM                              0.6443
+colour difference (CIEDE2000)    12.0519
+robustness                        0.9968
+quality                           0.7922
+FINAL SCORE                       0.8945
