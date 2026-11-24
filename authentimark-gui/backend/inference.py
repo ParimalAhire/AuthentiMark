@@ -4,7 +4,10 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 from PIL import Image, ImageFilter, ImageEnhance
-from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, LatentResidualEncoder, WatermarkDetector, prepare_for_vit
+try:
+    from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, LatentResidualEncoder, WatermarkDetector, prepare_for_vit
+except (ImportError, ValueError):
+    from models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, LatentResidualEncoder, WatermarkDetector, prepare_for_vit
 
 # Use both vCPUs for inference. The EC2 host has 2 cores; a swapfile covers
 # the model-load spike, so pinning to 1 thread only slowed embed/detect with
@@ -78,7 +81,7 @@ def get_latent_residual():
         if not os.path.exists(lr_path):
             raise FileNotFoundError(f"Latent-Residual model checkpoint not found at {lr_path}")
         checkpoint = torch.load(lr_path, map_location="cpu")
-        res_scale = checkpoint.get("config", {}).get("residual_scale", 0.1)
+        res_scale = min(checkpoint.get("config", {}).get("residual_scale", 0.025), 0.025)
         encoder = LatentResidualEncoder(residual_scale=res_scale)
         decoder = AEDecoder()
         encoder.load_state_dict(checkpoint["encoder"])

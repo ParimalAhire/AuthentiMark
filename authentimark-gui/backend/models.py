@@ -271,7 +271,7 @@ class TAESDBlock(nn.Module):
         self.skip = nn.Conv2d(c_in, c_out, 1, bias=False) if c_in != c_out else nn.Identity()
 
     def forward(self, x):
-        return self.skip(x) + self.conv(x)
+        return torch.relu(self.skip(x) + self.conv(x))
 
 
 class TAESDEncoder(nn.Module):
@@ -388,6 +388,7 @@ class LatentResidualEncoder(nn.Module):
         marked = self.vae.decode(latents + delta).sample
         cap = self.residual_scale
         residual = (marked - base) / 2
+        residual = residual - residual.mean(dim=(-2, -1), keepdim=True)
         return torch.clamp(image32 + cap * torch.tanh(residual / cap), 0.0, 1.0)
 
 
