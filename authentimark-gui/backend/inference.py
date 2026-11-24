@@ -93,13 +93,24 @@ def get_latent_residual():
 def get_detector():
     global _DETECTOR
     if _DETECTOR is None:
+        latent_vit_path = os.path.join(MODELS_DIR, "detector_vit_latent_app.pt")
         v2_path = os.path.join(MODELS_DIR, "detector_gan_finetuned_v2.pt")
         if not os.path.exists(v2_path):
             v2_path = os.path.join(MODELS_DIR, "detector_gan_fintuned_v2.pt")
         finetuned_path = os.path.join(MODELS_DIR, "detector_gan_finetuned.pt")
         orig_path = os.path.join(MODELS_DIR, "detector_latest.pt")
         
-        # Priority 1: GAN-finetuned V2 detector (local uncompressed 346MB checkpoint)
+        # Priority 1: Latest Latent-Residual fine-tuned ViT detector
+        if os.path.exists(latent_vit_path):
+            detector = WatermarkDetector()
+            checkpoint = torch.load(latent_vit_path, map_location="cpu")
+            weights = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint["model"]
+            detector.load_state_dict(weights, strict=False)
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Priority 2: GAN-finetuned V2 detector (local uncompressed 346MB checkpoint)
         if os.path.exists(v2_path):
             detector = WatermarkDetector()
             checkpoint = torch.load(v2_path, map_location="cpu")
@@ -162,6 +173,7 @@ def check_models_ready():
     vae_ok = os.path.exists(os.path.join(MODELS_DIR, "vae_latest.pt"))
     gan_ok = os.path.exists(os.path.join(MODELS_DIR, "gan_app1.pt")) or os.path.exists(os.path.join(MODELS_DIR, "gan_app.pt"))
     det_ok = (
+        os.path.exists(os.path.join(MODELS_DIR, "detector_vit_latent_app.pt")) or
         os.path.exists(os.path.join(MODELS_DIR, "detector_gan_finetuned_v2.pt")) or
         os.path.exists(os.path.join(MODELS_DIR, "detector_gan_fintuned_v2.pt")) or
         os.path.exists(os.path.join(MODELS_DIR, "detector_gan_v2_quantized.pt")) or
