@@ -8,22 +8,40 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from skimage.metrics import peak_signal_noise_ratio as psnr_metric
 from skimage.metrics import structural_similarity as ssim_metric
-from .inference import (
-    MODELS_LOADED,
-    ERROR_MSG,
-    watermark_image,
-    detect_watermark,
-    verdict_from_confidence,
-    attack_crop,
-    attack_rotate,
-    attack_noise,
-    attack_blur,
-    attack_jpeg,
-    attack_brightness,
-    attack_downscale,
-    attack_screenshot,
-    decode_message
-)
+try:
+    from .inference import (
+        MODELS_LOADED,
+        ERROR_MSG,
+        watermark_image,
+        detect_watermark,
+        verdict_from_confidence,
+        attack_crop,
+        attack_rotate,
+        attack_noise,
+        attack_blur,
+        attack_jpeg,
+        attack_brightness,
+        attack_downscale,
+        attack_screenshot,
+        decode_message
+    )
+except (ImportError, ValueError):
+    from inference import (
+        MODELS_LOADED,
+        ERROR_MSG,
+        watermark_image,
+        detect_watermark,
+        verdict_from_confidence,
+        attack_crop,
+        attack_rotate,
+        attack_noise,
+        attack_blur,
+        attack_jpeg,
+        attack_brightness,
+        attack_downscale,
+        attack_screenshot,
+        decode_message
+    )
 
 app = FastAPI(title="AuthentiMark API")
 
@@ -134,33 +152,43 @@ async def detect(file: UploadFile = File(...)):
 
 @app.post("/generate-image")
 async def generate_image(prompt: str = Form(...)):
-    try:
-        import urllib.parse
-        import urllib.request
-        encoded_prompt = urllib.parse.quote(prompt)
-        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=512&nologo=true"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            if r.status == 200:
-                img_bytes = r.read()
-                img_str = base64.b64encode(img_bytes).decode("utf-8")
-                return {"imageUrl": f"data:image/png;base64,{img_str}"}
-    except Exception:
-        pass
-        
-    img = Image.new("RGB", (512, 512))
-    draw = ImageDraw.Draw(img)
-    for y in range(512):
-        r = int(30 + (y / 512) * 50)
-        g = int(40 + (y / 512) * 80)
-        b = int(100 + (y / 512) * 120)
-        draw.line([(0, y), (512, y)], fill=(r, g, b))
-    draw.text((40, 240), f"Generated image for prompt:\n{prompt[:40]}", fill=(255, 255, 255))
+    import urllib.parse
+    import httpx
     
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    return {"imageUrl": f"data:image/png;base64,{img_str}"}
+    clean_prompt = prompt.strip()
+    encoded_prompt = urllib.parse.quote(clean_prompt)
+    
+    urls = [
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=512&nologo=true",
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?model=sana&width=512&height=512&nologo=true",
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed=42&width=512&height=512&nologo=true",
+    ]
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    last_err = None
+    try:
+        async with httpx.AsyncClient(timeout=35.0, verify=False, follow_redirects=True) as client:
+            for url in urls:
+                try:
+                    r = await client.get(url, headers=headers)
+                    if r.status_code == 200 and len(r.content) > 1000:
+                        img_str = base64.b64encode(r.content).decode("utf-8")
+                        content_type = r.headers.get("content-type", "image/jpeg")
+                        if not content_type.startswith("image/"):
+                            content_type = "image/jpeg"
+                        return {"imageUrl": f"data:{content_type};base64,{img_str}"}
+                except Exception as e:
+                    last_err = e
+                    continue
+    except Exception as e:
+        last_err = e
+
+    raise HTTPException(
+        status_code=502,
+        detail=f"Failed to generate AI image from API ({last_err or 'Service unavailable'}). Please check internet connection and try again."
+    )
 
 @app.post("/simulate-attack")
 async def simulate_attack(
