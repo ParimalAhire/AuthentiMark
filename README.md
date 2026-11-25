@@ -73,7 +73,6 @@ averaged over four attacks (JPEG 90, JPEG 30, crop and blur).
 ```text
 AuthentiMark/
 ├── README.md
-├── AuthentiMark_BTech_Report-Final.pdf   project report
 ├── ProjectV3_Final.ipynb                 training notebook (AE, VAE, ViT detector)
 ├── DEPLOYMENT_GUIDE.md
 └── authentimark-gui/
@@ -99,7 +98,7 @@ A GPU is not required to run the web application.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/lucky-sharma02/AuthentiMark.git
+git clone https://github.com/ParimalAhire/AuthentiMark.git
 cd AuthentiMark/authentimark-gui
 ```
 
