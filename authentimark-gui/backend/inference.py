@@ -4,96 +4,204 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 from PIL import Image, ImageFilter, ImageEnhance
-from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, WatermarkDetector, prepare_for_vit
+try:
+    from .models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, LatentResidualEncoder, WatermarkDetector, prepare_for_vit
+except (ImportError, ValueError):
+    from models import AEEncoder, AEDecoder, VAEEncoder, VAEDecoder, GANEncoder, GANDecoder, LatentResidualEncoder, WatermarkDetector, prepare_for_vit
+
+# Use both vCPUs for inference. The EC2 host has 2 cores; a swapfile covers
+# the model-load spike, so pinning to 1 thread only slowed embed/detect with
+# no real RAM saving. Overridable via TORCH_NUM_THREADS.
+torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "2")))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
-HF_MODEL_REPO = os.environ.get("HF_MODEL_REPO", "").strip()
-HF_TOKEN = os.environ.get("HF_TOKEN", "").strip() or None
+# Global model cache (lazy-loaded on demand to keep startup RAM < 50MB)
+_AE_ENCODER, _AE_DECODER = None, None
+_VAE_ENCODER, _VAE_DECODER = None, None
+_GAN_ENCODER, _GAN_DECODER = None, None
+_LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER = None, None
+_DETECTOR = None
 
-def check_model_exists(filename):
-    path = os.path.join(MODELS_DIR, filename)
-    if os.path.exists(path):
-        return path
+def get_ae():
+    global _AE_ENCODER, _AE_DECODER
+    if _AE_ENCODER is None or _AE_DECODER is None:
+        ae_path = os.path.join(MODELS_DIR, "ae_latest.pt")
+        if not os.path.exists(ae_path):
+            raise FileNotFoundError(f"AE model checkpoint not found at {ae_path}")
+        encoder = AEEncoder()
+        decoder = AEDecoder()
+        checkpoint = torch.load(ae_path, map_location="cpu")
+        encoder.load_state_dict(checkpoint["encoder"])
+        decoder.load_state_dict(checkpoint["decoder"])
+        encoder.eval()
+        decoder.eval()
+        _AE_ENCODER, _AE_DECODER = encoder, decoder
+    return _AE_ENCODER, _AE_DECODER
 
-    if HF_MODEL_REPO:
-        from huggingface_hub import hf_hub_download
-        os.makedirs(MODELS_DIR, exist_ok=True)
-        hf_hub_download(
-            repo_id=HF_MODEL_REPO,
-            filename=filename,
-            repo_type="model",
-            local_dir=MODELS_DIR,
-            token=HF_TOKEN,
-        )
-        if os.path.exists(path):
-            return path
-        raise FileNotFoundError(
-            f"Downloaded '{filename}' from Hugging Face repo '{HF_MODEL_REPO}' "
-            f"but it was not found at '{path}'."
-        )
+def get_vae():
+    global _VAE_ENCODER, _VAE_DECODER
+    if _VAE_ENCODER is None or _VAE_DECODER is None:
+        vae_path = os.path.join(MODELS_DIR, "vae_latest.pt")
+        if not os.path.exists(vae_path):
+            raise FileNotFoundError(f"VAE model checkpoint not found at {vae_path}")
+        encoder = VAEEncoder()
+        decoder = VAEDecoder()
+        checkpoint = torch.load(vae_path, map_location="cpu")
+        encoder.load_state_dict(checkpoint["encoder"])
+        decoder.load_state_dict(checkpoint["decoder"])
+        encoder.eval()
+        decoder.eval()
+        _VAE_ENCODER, _VAE_DECODER = encoder, decoder
+    return _VAE_ENCODER, _VAE_DECODER
+def get_gan():
+    global _GAN_ENCODER, _GAN_DECODER
+    if _GAN_ENCODER is None or _GAN_DECODER is None:
+        gan_path = os.path.join(MODELS_DIR, "gan_app1.pt")
+        if not os.path.exists(gan_path):
+            gan_path = os.path.join(MODELS_DIR, "gan_app.pt")
+        if not os.path.exists(gan_path):
+            raise FileNotFoundError(f"GAN model checkpoint not found at {gan_path}")
+        encoder = GANEncoder(residual_scale=0.3)
+        decoder = GANDecoder()
+        checkpoint = torch.load(gan_path, map_location="cpu")
+        encoder.load_state_dict(checkpoint["encoder"])
+        decoder.load_state_dict(checkpoint["decoder"])
+        encoder.eval()
+        decoder.eval()
+        _GAN_ENCODER, _GAN_DECODER = encoder, decoder
+    return _GAN_ENCODER, _GAN_DECODER
 
-    raise FileNotFoundError(
-        f"Required model checkpoint '{filename}' was not found in "
-        f"'{MODELS_DIR}'. Please copy it from Google Drive before starting."
+
+def get_latent_residual():
+    global _LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER
+    if _LATENT_RESIDUAL_ENCODER is None or _LATENT_RESIDUAL_DECODER is None:
+        lr_path = os.path.join(MODELS_DIR, "latent_residual_app.pt")
+        if not os.path.exists(lr_path):
+            raise FileNotFoundError(f"Latent-Residual model checkpoint not found at {lr_path}")
+        checkpoint = torch.load(lr_path, map_location="cpu")
+        res_scale = min(checkpoint.get("config", {}).get("residual_scale", 0.025), 0.025)
+        encoder = LatentResidualEncoder(residual_scale=res_scale)
+        decoder = AEDecoder()
+        encoder.load_state_dict(checkpoint["encoder"])
+        decoder.load_state_dict(checkpoint["decoder"])
+        encoder.eval()
+        decoder.eval()
+        _LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER = encoder, decoder
+    return _LATENT_RESIDUAL_ENCODER, _LATENT_RESIDUAL_DECODER
+
+
+
+def get_detector():
+    global _DETECTOR
+    if _DETECTOR is None:
+        latent_vit_path = os.path.join(MODELS_DIR, "detector_vit_latent_app.pt")
+        v2_path = os.path.join(MODELS_DIR, "detector_gan_finetuned_v2.pt")
+        if not os.path.exists(v2_path):
+            v2_path = os.path.join(MODELS_DIR, "detector_gan_fintuned_v2.pt")
+        finetuned_path = os.path.join(MODELS_DIR, "detector_gan_finetuned.pt")
+        orig_path = os.path.join(MODELS_DIR, "detector_latest.pt")
+        
+        # Priority 1: Latest Latent-Residual fine-tuned ViT detector
+        if os.path.exists(latent_vit_path):
+            detector = WatermarkDetector()
+            checkpoint = torch.load(latent_vit_path, map_location="cpu")
+            weights = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint["model"]
+            detector.load_state_dict(weights, strict=False)
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Priority 2: GAN-finetuned V2 detector (local uncompressed 346MB checkpoint)
+        if os.path.exists(v2_path):
+            detector = WatermarkDetector()
+            checkpoint = torch.load(v2_path, map_location="cpu")
+            detector.load_state_dict(checkpoint["model"])
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Priority 2: GAN-finetuned V2 quantized detector (85MB lightweight checkpoint for git/cloud)
+        quant_v2_path = os.path.join(MODELS_DIR, "detector_gan_v2_quantized.pt")
+        if os.path.exists(quant_v2_path):
+            base_model = WatermarkDetector()
+            detector = torch.quantization.quantize_dynamic(base_model, {torch.nn.Linear}, dtype=torch.qint8)
+            checkpoint = torch.load(quant_v2_path, map_location="cpu")
+            detector.load_state_dict(checkpoint["model"])
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Priority 3: GAN-finetuned V1 detector
+        if os.path.exists(finetuned_path):
+            detector = WatermarkDetector()
+            checkpoint = torch.load(finetuned_path, map_location="cpu")
+            detector.load_state_dict(checkpoint["model"])
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # Fallback: Original detector
+        if os.path.exists(orig_path):
+            detector = WatermarkDetector()
+            checkpoint = torch.load(orig_path, map_location="cpu")
+            detector.load_state_dict(checkpoint["model"])
+            detector.eval()
+            _DETECTOR = detector
+            return _DETECTOR
+
+        # ─── Quantized model fallbacks (Commented out to enforce original model only) ───
+        # full_quant_path = os.path.join(MODELS_DIR, "detector_quantized_model.pt")
+        # if os.path.exists(full_quant_path):
+        #     _DETECTOR = torch.load(full_quant_path, map_location="cpu", weights_only=False)
+        #     _DETECTOR.eval()
+        #     return _DETECTOR
+        #
+        # quant_path = os.path.join(MODELS_DIR, "detector_quantized.pt")
+        # if os.path.exists(quant_path):
+        #     base_model = WatermarkDetector()
+        #     detector = torch.quantization.quantize_dynamic(base_model, {torch.nn.Linear}, dtype=torch.qint8)
+        #     checkpoint = torch.load(quant_path, map_location="cpu")
+        #     detector.load_state_dict(checkpoint["model"])
+        #     detector.eval()
+        #     _DETECTOR = detector
+        #     return _DETECTOR
+            
+        raise FileNotFoundError(f"Original detector checkpoint 'detector_latest.pt' was not found in '{MODELS_DIR}'.")
+    return _DETECTOR
+
+def check_models_ready():
+    ae_ok = os.path.exists(os.path.join(MODELS_DIR, "ae_latest.pt"))
+    vae_ok = os.path.exists(os.path.join(MODELS_DIR, "vae_latest.pt"))
+    gan_ok = os.path.exists(os.path.join(MODELS_DIR, "gan_app1.pt")) or os.path.exists(os.path.join(MODELS_DIR, "gan_app.pt"))
+    det_ok = (
+        os.path.exists(os.path.join(MODELS_DIR, "detector_vit_latent_app.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_finetuned_v2.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_fintuned_v2.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_v2_quantized.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_gan_finetuned.pt")) or
+        os.path.exists(os.path.join(MODELS_DIR, "detector_latest.pt"))
     )
+    lr_ok = os.path.exists(os.path.join(MODELS_DIR, "latent_residual_app.pt"))
+    return ae_ok and vae_ok and gan_ok and det_ok
 
-def load_ae():
-    ae_path = check_model_exists("ae_latest.pt")
-    encoder = AEEncoder()
-    decoder = AEDecoder()
-    checkpoint = torch.load(ae_path, map_location="cpu")
-    encoder.load_state_dict(checkpoint["encoder"])
-    decoder.load_state_dict(checkpoint["decoder"])
-    encoder.eval()
-    decoder.eval()
-    return encoder, decoder
-
-def load_vae():
-    vae_path = check_model_exists("vae_latest.pt")
-    encoder = VAEEncoder()
-    decoder = VAEDecoder()
-    checkpoint = torch.load(vae_path, map_location="cpu")
-    encoder.load_state_dict(checkpoint["encoder"])
-    decoder.load_state_dict(checkpoint["decoder"])
-    encoder.eval()
-    decoder.eval()
-    return encoder, decoder
-
-def load_detector():
-    det_path = check_model_exists("detector_latest.pt")
-    detector = WatermarkDetector()
-    checkpoint = torch.load(det_path, map_location="cpu")
-    detector.load_state_dict(checkpoint["model"])
-    detector.eval()
-    return detector
-
-try:
-    AE_ENCODER, AE_DECODER = load_ae()
-    VAE_ENCODER, VAE_DECODER = load_vae()
-    DETECTOR = load_detector()
-    MODELS_LOADED = True
-    ERROR_MSG = ""
-except Exception as e:
-    AE_ENCODER, AE_DECODER = None, None
-    VAE_ENCODER, VAE_DECODER = None, None
-    DETECTOR = None
-    MODELS_LOADED = False
-    ERROR_MSG = str(e)
+# For backward compatibility
+MODELS_LOADED = check_models_ready()
+ERROR_MSG = "" if MODELS_LOADED else "Model checkpoints missing on disk."
 
 def watermark_image(image, method):
     if method == "ae":
-        encoder = AE_ENCODER
+        encoder, _ = get_ae()
     elif method == "vae":
-        encoder = VAE_ENCODER
+        encoder, _ = get_vae()
+    elif method == "gan":
+        encoder, _ = get_gan()
+    elif method in ("latent_residual", "diffusion"):
+        encoder, _ = get_latent_residual()
     else:
-        raise ValueError(f"Unknown method {method}")
+        raise ValueError(f"Unknown watermarking method: {method}")
         
-    if encoder is None:
-        raise RuntimeError(f"Encoder model for {method} is not loaded.")
-        
-    # Preserve original resolution to avoid blurriness
     W, H = image.size
         
     transform = T.Compose([
@@ -107,15 +215,11 @@ def watermark_image(image, method):
     with torch.no_grad():
         wm_tensor = encoder(img_tensor, msg_tensor)
         
-    # Extract the residual watermark pattern
     residual = wm_tensor - img_tensor
-    
-    # Resize the residual back to the original image dimensions
     residual_highres = torch.nn.functional.interpolate(
         residual, size=(H, W), mode='bilinear', align_corners=False
     )
     
-    # Add high-resolution residual to high-resolution original image
     orig_tensor = T.ToTensor()(image).unsqueeze(0)
     wm_tensor_highres = torch.clamp(orig_tensor + residual_highres, 0.0, 1.0)
     
@@ -123,12 +227,10 @@ def watermark_image(image, method):
     return wm_image, msg.tolist()
 
 def detect_watermark(image):
-    if DETECTOR is None:
-        raise RuntimeError("Detector model is not loaded.")
-        
+    detector = get_detector()
     img_tensor = prepare_for_vit(image)
     with torch.no_grad():
-        logits = DETECTOR(img_tensor)
+        logits = detector(img_tensor)
         probs = torch.softmax(logits, dim=-1)
         
     prediction = probs.argmax(dim=-1).item()
@@ -171,11 +273,9 @@ def attack_jpeg(image, quality):
     return Image.open(buffered).convert("RGB")
 
 def attack_brightness(image, factor):
-    # factor 1.0 = unchanged; <1 darker, >1 brighter
     return ImageEnhance.Brightness(image).enhance(float(factor))
 
 def attack_downscale(image, scale_ratio):
-    # shrink to scale_ratio then restore size -> real detail loss
     w, h = image.size
     scale_ratio = max(0.1, min(1.0, float(scale_ratio)))
     small = image.resize(
@@ -185,8 +285,6 @@ def attack_downscale(image, scale_ratio):
     return small.resize((w, h), resample=Image.BICUBIC)
 
 def attack_screenshot(image, severity):
-    # approximates capturing an image off a screen:
-    # slight downscale + mild recompression + faint blur + tiny brightness lift
     severity = max(0.0, min(1.0, float(severity)))
     out = attack_downscale(image, 1.0 - 0.18 * severity)
     out = attack_blur(out, 0.4 + 0.8 * severity)
@@ -196,14 +294,15 @@ def attack_screenshot(image, severity):
 
 def decode_message(image, method):
     if method == "ae":
-        decoder = AE_DECODER
+        _, decoder = get_ae()
     elif method == "vae":
-        decoder = VAE_DECODER
+        _, decoder = get_vae()
+    elif method == "gan":
+        _, decoder = get_gan()
+    elif method in ("latent_residual", "diffusion"):
+        _, decoder = get_latent_residual()
     else:
         raise ValueError(f"Unknown method {method}")
-        
-    if decoder is None:
-        raise RuntimeError(f"Decoder model for {method} is not loaded.")
         
     transform = T.Compose([
         T.Resize((128, 128)),

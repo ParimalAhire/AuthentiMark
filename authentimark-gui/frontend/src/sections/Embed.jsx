@@ -141,19 +141,24 @@ export default function Embed({ go }) {
       <div className="flex flex-wrap items-end gap-6">
         <div>
           <p className="tag mb-2">Embedding model</p>
-          <div className="seg inline-flex p-1 rounded-lg bg-graphite border border-[var(--line)]">
-            {['ae', 'vae'].map((m) => (
+          <div className="seg inline-flex flex-wrap p-1 rounded-lg bg-graphite border border-[var(--line)] gap-1">
+            {[
+              { id: 'ae', label: 'Autoencoder' },
+              { id: 'vae', label: 'Variational' },
+              { id: 'gan', label: 'GAN (Adversarial)' },
+              { id: 'latent_residual', label: 'LR (Diffusion)' }
+            ].map(({ id: m, label }) => (
               <button
                 key={m}
                 onClick={() => setMethod(m)}
-                className="px-4 py-2 rounded-md text-[12px] font-medium uppercase tracking-wide transition-colors"
+                className="px-3.5 py-2 rounded-md text-[11px] sm:text-[12px] font-medium uppercase tracking-wide transition-colors"
                 style={{
                   fontFamily: 'var(--font-mono)',
                   background: method === m ? 'var(--filament)' : 'transparent',
                   color: method === m ? 'var(--graphite)' : 'var(--mute)'
                 }}
               >
-                {m === 'ae' ? 'Autoencoder' : 'Variational'}
+                {label}
               </button>
             ))}
           </div>

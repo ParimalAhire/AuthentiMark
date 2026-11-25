@@ -10,7 +10,7 @@ build/
 *.tsbuildinfo
 
 # ─────────────── Trained model checkpoints (large) ──────────────
-# distributed separately (Google Drive) — never commit
+# Ignore all model weights by default
 models/
 authentimark-gui/models/
 *.pt
@@ -20,6 +20,25 @@ authentimark-gui/models/
 *.onnx
 *.h5
 *.pkl
+
+# Allow lightweight checkpoints (<100MB) for production deployment
+!authentimark-gui/models/
+!authentimark-gui/models/ae_latest.pt
+!authentimark-gui/models/vae_latest.pt
+!authentimark-gui/models/detector_quantized.pt
+!authentimark-gui/models/detector_quantized_model.pt
+!authentimark-gui/models/gan_app1.pt
+!authentimark-gui/models/gan_app.pt
+!authentimark-gui/models/detector_gan_v2_quantized.pt
+
+# ──────────────────────── Study Material ───────────────────────
+[sS]tudy*[mM]aterial/
+[sS]tudy*[mM]aterial*/
+study material/
+Study Material/
+study_material/
+StudyMaterial/
+*[sS]tudy*[mM]aterial*
 
 # ───────────────────────────── Python ──────────────────────────
 __pycache__/
@@ -39,10 +58,10 @@ env/
 .env.local
 .env.*.local
 
-# VITE_API_URL is the public backend URL, not a secret. Vite needs .env.production
-# at build time (Render builds from the repo), so it is intentionally committed.
-!.env.production
-!.env.example
+# SSH keys / certs — never commit
+*.pem
+*.key
+temp-key.pem
 
 # ───────────────────────────── Logs ────────────────────────────
 *.log
@@ -68,3 +87,6 @@ desktop.ini
 scratch/
 tmp/
 *.tmp
+
+# Local-only docs / reports / exports - not tracked
+docs/

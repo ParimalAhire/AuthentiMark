@@ -96,42 +96,48 @@ function ThreeUp({ label, originalUrl, cleanUrl, attackedUrl, rendering, tag, ps
 function TimelineRow({ entry }) {
   const pct = entry.signal * 100
   const tone = toneFor(pct)
+  const isLR = entry.target === 'latent_residual' || entry.target === 'lr'
+  const modelColor = entry.target === 'ae' ? 'var(--trace)' : entry.target === 'vae' ? 'var(--signal)' : entry.target === 'gan' ? '#F43F5E' : '#8B5CF6'
+  const displayTag = isLR ? 'LR' : entry.target.toUpperCase()
+
   return (
     <div className="flex items-center gap-3 py-2 border-t border-[var(--line)]">
       <span className="readout text-[10px] text-mute w-6 shrink-0">{String(entry.id).padStart(2, '0')}</span>
-      <span className="tag w-9 shrink-0" style={{ color: entry.target === 'ae' ? 'var(--trace)' : 'var(--signal)' }}>
-        {entry.target}
+      <span className="tag w-8 shrink-0 font-bold" style={{ color: modelColor }}>
+        {displayTag}
       </span>
       <span className="text-[11px] text-mute flex-1 truncate" title={entry.label}>{entry.label || 'no attack'}</span>
       <div className="meter-bar w-24 shrink-0" style={{ '--tone': TONE_HEX[tone], height: 6 }}>
         <i style={{ width: `${pct}%` }} />
       </div>
       <span className="readout text-[12px] w-12 text-right shrink-0" style={{ color: TONE_HEX[tone] }}>
-        {pct.toFixed(0)}
+        {pct.toFixed(0)}%
       </span>
     </div>
   )
 }
 
+const ALL_MODELS = ['ae', 'vae', 'gan', 'latent_residual']
+
 export default function Attack({ go }) {
   const { source, marks, setMark, timeline, pushTimeline, clearTimeline } = useWorkspace()
-  const haveAny = marks.ae || marks.vae
+  const haveAny = marks.ae || marks.vae || marks.gan || marks.latent_residual
 
-  const [target, setTarget] = useState(marks.ae ? 'ae' : 'vae')
+  const [target, setTarget] = useState(marks.ae ? 'ae' : marks.vae ? 'vae' : marks.gan ? 'gan' : 'latent_residual')
   const [compare, setCompare] = useState(false)
   const [attacks, setAttacks] = useState(idleState)
-  const [attackedUrls, setAttackedUrls] = useState({ ae: null, vae: null })
-  const [attackedFiles, setAttackedFiles] = useState({ ae: null, vae: null })
+  const [attackedUrls, setAttackedUrls] = useState({ ae: null, vae: null, gan: null, latent_residual: null })
+  const [attackedFiles, setAttackedFiles] = useState({ ae: null, vae: null, gan: null, latent_residual: null })
   const [rendering, setRendering] = useState(false)
   const [detecting, setDetecting] = useState(false)
-  const [results, setResults] = useState({ ae: null, vae: null })
+  const [results, setResults] = useState({ ae: null, vae: null, gan: null, latent_residual: null })
   const [stale, setStale] = useState(false)
   const [sampleBusy, setSampleBusy] = useState(false)
   const [err, setErr] = useState(null)
   const debRef = useRef(0)
   const runId = useRef(0)
 
-  const methods = compare ? ['ae', 'vae'].filter((m) => marks[m]) : [target]
+  const methods = compare ? ALL_MODELS.filter((m) => marks[m]) : [target]
   const active = useMemo(() => activeAttacks(attacks), [attacks])
   const summary = useMemo(() => attackSummary(attacks).join('  ·  '), [attacks])
 
@@ -142,13 +148,16 @@ export default function Attack({ go }) {
     try {
       const next = { ...attackedUrls }
       const nextF = { ...attackedFiles }
-      for (const m of methods) {
-        if (!marks[m]) continue
-        const f = await runAttackChain(marks[m].file, attacks)
-        if (runId.current !== mine) return
+      const targets = methods.filter((m) => marks[m])
+      const rendered = await Promise.all(
+        targets.map((m) => runAttackChain(marks[m].file, attacks))
+      )
+      if (runId.current !== mine) return
+      targets.forEach((m, i) => {
+        const f = rendered[i]
         nextF[m] = f
         next[m] = active.length ? URL.createObjectURL(f) : marks[m].url
-      }
+      })
       setAttackedUrls(next)
       setAttackedFiles(nextF)
     } catch (e) {
@@ -174,18 +183,19 @@ export default function Attack({ go }) {
     setDetecting(true)
     setErr(null)
     try {
-      for (const m of methods) {
-        const f = attackedFiles[m] || marks[m]?.file
-        if (!f) continue
-        const data = await detectWatermark(f)
-        setResults((r) => ({ ...r, [m]: data }))
+      const targets = methods.filter((m) => attackedFiles[m] || marks[m]?.file)
+      const data = await Promise.all(
+        targets.map((m) => detectWatermark(attackedFiles[m] || marks[m].file))
+      )
+      targets.forEach((m, i) => {
+        setResults((r) => ({ ...r, [m]: data[i] }))
         pushTimeline({
           label: summary,
           target: m,
-          signal: signalOf(data),
-          verdict: data.verdict
+          signal: signalOf(data[i]),
+          verdict: data[i].verdict
         })
-      }
+      })
       setStale(false)
     } catch (e) {
       setErr(e.message || 'The detector did not respond. Check the backend and try again.')
@@ -200,14 +210,15 @@ export default function Attack({ go }) {
     try {
       const blob = await (await fetch('/samples/sample-portrait.jpg')).blob()
       const f = new File([blob], 'sample-portrait.jpg', { type: 'image/jpeg' })
-      for (const m of ['ae', 'vae']) {
-        const data = await watermarkImage(f, m)
+      const marked = await Promise.all(ALL_MODELS.map((m) => watermarkImage(f, m)))
+      ALL_MODELS.forEach((m, i) => {
+        const data = marked[i]
         setMark(m, {
           url: data.watermarkedImageUrl,
           file: base64ToFile(data.watermarkedImageUrl, `${m}_marked.png`),
           psnr: data.psnr, ssim: data.ssim, bits: data.message
         })
-      }
+      })
     } catch (e) {
       setErr("Couldn't prepare a sample. Try the Embed section with your own image.")
     } finally {
@@ -234,7 +245,7 @@ export default function Attack({ go }) {
   }
 
   const cleanUrl = (m) => marks[m]?.url
-  const origUrl = source?.url || marks.ae?.url || marks.vae?.url
+  const origUrl = source?.url || marks.ae?.url || marks.vae?.url || marks.gan?.url || marks.latent_residual?.url
 
   return (
     <div className="space-y-7">
@@ -242,7 +253,7 @@ export default function Attack({ go }) {
       <div className="flex flex-wrap items-center gap-3">
         {!compare && (
           <div className="seg inline-flex p-1 rounded-lg bg-graphite border border-[var(--line)]">
-            {['ae', 'vae'].map((m) => (
+            {ALL_MODELS.map((m) => (
               <button
                 key={m}
                 disabled={!marks[m]}
@@ -254,7 +265,7 @@ export default function Attack({ go }) {
                   color: target === m ? 'var(--graphite)' : 'var(--mute)'
                 }}
               >
-                {m}
+                {m === 'latent_residual' ? 'LR' : m}
               </button>
             ))}
           </div>
@@ -262,11 +273,11 @@ export default function Attack({ go }) {
         <button
           className="chip"
           data-on={compare}
-          disabled={!(marks.ae && marks.vae)}
+          disabled={ALL_MODELS.filter((m) => marks[m]).length < 2}
           onClick={() => setCompare((c) => !c)}
-          title={!(marks.ae && marks.vae) ? 'Embed both AE and VAE first' : ''}
+          title={ALL_MODELS.filter((m) => marks[m]).length < 2 ? 'Embed at least two models first' : ''}
         >
-          <span className="dot" />Compare AE vs VAE
+          <span className="dot" />Compare Models
         </button>
         {active.length > 0 && (
           <button className="chip" onClick={resetAll}><span className="dot" />Clear {active.length} attack{active.length > 1 ? 's' : ''}</button>
@@ -288,8 +299,8 @@ export default function Attack({ go }) {
         {methods.map((m) => (
           <ThreeUp
             key={m}
-            label={compare ? `${m.toUpperCase()} watermark` : null}
-            tag={m.toUpperCase()}
+            label={compare ? `${m === 'latent_residual' ? 'LR' : m.toUpperCase()} watermark` : null}
+            tag={m === 'latent_residual' ? 'LR' : m.toUpperCase()}
             psnr={marks[m]?.psnr}
             originalUrl={origUrl}
             cleanUrl={cleanUrl(m)}
@@ -315,18 +326,23 @@ export default function Attack({ go }) {
       </div>
 
       {/* readout + timeline */}
-      <div className="grid lg:grid-cols-[auto_minmax(0,1fr)] gap-8 pt-2 items-start max-w-4xl mx-auto">
-        <div className="flex gap-6">
+      <div className={compare ? "space-y-6 pt-2 max-w-4xl mx-auto" : "grid lg:grid-cols-[auto_minmax(0,1fr)] gap-8 pt-2 items-start max-w-4xl mx-auto"}>
+        <div className={`flex gap-6 ${compare ? "justify-center flex-wrap" : ""}`}>
           {methods.map((m) => {
             const res = results[m]
             const sig = res ? signalOf(res) : 0
             const v = res ? verdictFromSignal(sig) : null
+            const modelColor = m === 'ae' ? 'var(--trace)' : m === 'vae' ? 'var(--signal)' : m === 'gan' ? '#F43F5E' : '#8B5CF6'
             return (
               <div key={m} className={`text-center shrink-0 ${stale && res ? 'opacity-50' : ''}`}>
-                {compare && <p className="tag mb-1" style={{ color: m === 'ae' ? 'var(--trace)' : 'var(--signal)' }}>{m.toUpperCase()}</p>}
+                {compare && (
+                  <p className="tag mb-1 font-bold" style={{ color: modelColor }}>
+                    {m === 'latent_residual' ? 'LR' : m.toUpperCase()}
+                  </p>
+                )}
                 <SignalMeter
                   variant="dial"
-                  size={compare ? 148 : 176}
+                  size={compare ? 150 : 176}
                   value={sig * 100}
                   label={res ? 'watermark signal' : 'run to measure'}
                 />
@@ -340,9 +356,11 @@ export default function Attack({ go }) {
           })}
         </div>
 
-        <div className="panel p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-display font-semibold text-[13px] tracking-wider uppercase text-mute">Timeline — {timeline.length} run{timeline.length === 1 ? '' : 's'}</h4>
+        <div className="panel p-5 w-full">
+          <div className="flex items-center justify-between mb-3 border-b border-[var(--line)] pb-2.5">
+            <h4 className="font-display font-semibold text-[13px] tracking-wider uppercase text-mute">
+              Timeline Results — {timeline.length} run{timeline.length === 1 ? '' : 's'}
+            </h4>
             {timeline.length > 0 && (
               <button className="font-sans text-[10px] uppercase tracking-wider text-mute hover:text-filament" style={{ background: 'none', border: 0, cursor: 'pointer' }} onClick={clearTimeline}>clear</button>
             )}
@@ -352,7 +370,7 @@ export default function Attack({ go }) {
               Each detection run lands here. Try JPEG at 95, then 88, then 80 — watch the watermark signal fall off a cliff.
             </p>
           ) : (
-            <div className="max-h-64 overflow-y-auto pr-1">
+            <div className="max-h-72 overflow-y-auto pr-1">
               {timeline.map((e) => <TimelineRow key={`${e.id}-${e.target}`} entry={e} />)}
             </div>
           )}

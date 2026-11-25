@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useWorkspace } from './lib/workspace'
+import { checkHealth } from './api'
 import Embed from './sections/Embed'
 import Examine from './sections/Examine'
 import Attack from './sections/Attack'
+import Compare from './sections/Compare'
 import ModelsDetails from './sections/ModelsDetails'
 
 const Icon = ({ d, className = 'w-4 h-4' }) => (
@@ -35,7 +37,9 @@ function SpecimenStrip() {
   const items = [
     source && { k: 'src', tag: 'SRC', url: source.url, dot: null },
     marks.ae && { k: 'ae', tag: 'AE', url: marks.ae.url, dot: 'var(--trace)' },
-    marks.vae && { k: 'vae', tag: 'VAE', url: marks.vae.url, dot: 'var(--signal)' }
+    marks.vae && { k: 'vae', tag: 'VAE', url: marks.vae.url, dot: 'var(--signal)' },
+    marks.gan && { k: 'gan', tag: 'GAN', url: marks.gan.url, dot: '#F43F5E' },
+    marks.latent_residual && { k: 'latent_residual', tag: 'LR', url: marks.latent_residual.url, dot: '#8B5CF6' }
   ].filter(Boolean)
 
   if (items.length === 0) {
@@ -71,8 +75,7 @@ export default function Console({ section, setSection }) {
 
   useEffect(() => {
     let alive = true
-    fetch('http://localhost:8000/health')
-      .then((r) => r.json())
+    checkHealth()
       .then((d) => alive && setOnline(d.status === 'ok'))
       .catch(() => alive && setOnline(false))
     return () => { alive = false }
@@ -116,7 +119,7 @@ export default function Console({ section, setSection }) {
       <main className="flex-1 min-w-0 flex flex-col min-h-screen">
         <div className="flex-1 p-5 sm:p-8 lg:p-12 max-w-[1000px] w-full mx-auto">
           <header className="mb-8">
-            <p className="tag mb-2">Console · {String(SECTIONS.findIndex((s) => s.id === section) + 1).padStart(2, '0')} / 04</p>
+            <p className="tag mb-2">Console · {String(SECTIONS.findIndex((s) => s.id === section) + 1).padStart(2, '0')} / {String(SECTIONS.length).padStart(2, '0')}</p>
             <h1 className="display-xl text-[clamp(2.2rem,5vw,3.4rem)]">{meta.label}</h1>
             <p className="text-mute text-[14px] mt-2">{meta.blurb}</p>
           </header>
@@ -137,6 +140,8 @@ export default function Console({ section, setSection }) {
           </span>
           <span>AE {marks.ae ? '✓' : '—'}</span>
           <span>VAE {marks.vae ? '✓' : '—'}</span>
+          <span style={{ color: marks.gan ? '#F43F5E' : 'inherit' }}>GAN {marks.gan ? '✓' : '—'}</span>
+          <span style={{ color: marks.latent_residual ? '#8B5CF6' : 'inherit' }}>LR {marks.latent_residual ? '✓' : '—'}</span>
           <span>{timeline.length} detection{timeline.length === 1 ? '' : 's'} logged</span>
           <span className="ml-auto">inference only · no data leaves this machine</span>
         </footer>

@@ -58,6 +58,14 @@ class AEDecoder(nn.Module):
         features = features.view(features.size(0), -1)
         return self.fc(features)
 
+class GANEncoder(AEEncoder):
+    """Adversarial Generator for invisible watermark embedding."""
+    pass
+
+class GANDecoder(AEDecoder):
+    """Adversarial Extractor for 32-bit watermark recovery."""
+    pass
+
 class VAEEncoder(nn.Module):
     def __init__(self, latent_channels=64, residual_scale=0.3):
         super().__init__()
@@ -244,4 +252,143 @@ def prepare_for_vit(image):
         T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
     return transform(image).unsqueeze(0)
+
+
+# ============================================================================
+# Latent-Residual (Diffusion / TAESD) Watermarking Components
+# ============================================================================
+
+class TAESDBlock(nn.Module):
+    def __init__(self, c_in, c_out):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(c_in, c_out, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(c_out, c_out, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(c_out, c_out, 3, padding=1),
+        )
+        self.skip = nn.Conv2d(c_in, c_out, 1, bias=False) if c_in != c_out else nn.Identity()
+
+    def forward(self, x):
+        return torch.relu(self.skip(x) + self.conv(x))
+
+
+class TAESDEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(3, 64, 3, padding=1),
+            TAESDBlock(64, 64),
+            nn.Conv2d(64, 64, 3, stride=2, padding=1, bias=False),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            nn.Conv2d(64, 64, 3, stride=2, padding=1, bias=False),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            nn.Conv2d(64, 64, 3, stride=2, padding=1, bias=False),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            nn.Conv2d(64, 4, 3, padding=1),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class TAESDDecoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(4, 64, 3, padding=1),
+            nn.ReLU(inplace=True),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(64, 64, 3, padding=1, bias=False),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(64, 64, 3, padding=1, bias=False),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            TAESDBlock(64, 64),
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(64, 64, 3, padding=1, bias=False),
+            TAESDBlock(64, 64),
+            nn.Conv2d(64, 3, 3, padding=1),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class AutoencoderTinyWrapper(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = TAESDEncoder()
+        self.decoder = TAESDDecoder()
+
+    def encode(self, x):
+        class Output:
+            pass
+        out = Output()
+        out.latents = self.encoder(x)
+        return out
+
+    def decode(self, z):
+        class Output:
+            pass
+        out = Output()
+        out.sample = self.decoder(z)
+        return out
+
+
+class LatentResidualEncoder(nn.Module):
+    """
+    Latent-Residual Watermarking Generator.
+    Embeds 32-bit watermark inside TAESD latent space, maps delta into pixel residual.
+    """
+    def __init__(self, message_len=32, img_size=128, latent_scale=2.0, residual_scale=0.1):
+        super().__init__()
+        self.message_len = message_len
+        self.img_size = img_size
+        self.latent_scale = latent_scale
+        self.residual_scale = residual_scale
+        self.vae = AutoencoderTinyWrapper()
+        self.latent_size = img_size // 8
+        self.msg_fc = nn.Linear(message_len, self.latent_size * self.latent_size)
+        self.msg_proj = nn.Linear(message_len, 4 * self.latent_size * self.latent_size)
+        self.latent_net = nn.Sequential(
+            nn.Conv2d(4 + 1, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 4, 3, padding=1),
+        )
+
+    def forward(self, image, message):
+        batch = image.size(0)
+        image32 = image.float()
+        message32 = message.float()
+        with torch.no_grad():
+            latents = self.vae.encode(image32 * 2 - 1).latents
+            base = self.vae.decode(latents).sample
+        message_map = self.msg_fc(message32).view(batch, 1, self.latent_size, self.latent_size)
+        direct = self.msg_proj(message32).view(batch, 4, self.latent_size, self.latent_size)
+        features = self.latent_net(torch.cat([latents, message_map], dim=1))
+        delta = self.latent_scale * torch.tanh(features + direct)
+        marked = self.vae.decode(latents + delta).sample
+        cap = self.residual_scale
+        residual = (marked - base) / 2
+        residual = residual - residual.mean(dim=(-2, -1), keepdim=True)
+        return torch.clamp(image32 + cap * torch.tanh(residual / cap), 0.0, 1.0)
+
 
